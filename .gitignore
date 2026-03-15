@@ -8,3 +8,8 @@ build/
 .ruff_cache/
 .pytest_cache/
 .pixi/
+
+__pycache__/
+*.pyc
+.pixi/
+pixi.lock
