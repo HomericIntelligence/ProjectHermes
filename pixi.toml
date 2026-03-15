@@ -10,7 +10,7 @@ python = ">=3.10"
 
 [pypi-dependencies]
 fastapi = "*"
-"uvicorn[standard]" = "*"
+uvicorn = {version = "*", extras = ["standard"]}
 nats-py = "*"
 pydantic = ">=2.0"
 pydantic-settings = "*"
