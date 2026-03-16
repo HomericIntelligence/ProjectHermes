@@ -15,7 +15,6 @@ nats-py = "*"
 pydantic = ">=2.0"
 pydantic-settings = "*"
 httpx = "*"
-python-dotenv = "*"
 
 [feature.dev.pypi-dependencies]
 pytest = "*"

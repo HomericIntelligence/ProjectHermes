@@ -2,28 +2,23 @@
 
 from __future__ import annotations
 
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings:
+class Settings(BaseSettings):
     """Runtime settings resolved from environment variables."""
 
-    maestro_url: str
-    maestro_api_key: str
-    nats_url: str
-    hermes_port: int
-    webhook_secret: str
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
 
-    def __init__(self) -> None:
-        self.maestro_url = os.environ.get("MAESTRO_URL", "http://172.20.0.1:23000")
-        self.maestro_api_key = os.environ.get("MAESTRO_API_KEY", "")
-        self.nats_url = os.environ.get("NATS_URL", "nats://localhost:4222")
-        self.hermes_port = int(os.environ.get("HERMES_PORT", "8080"))
-        self.webhook_secret = os.environ.get("WEBHOOK_SECRET", "")
+    maestro_url: str = "http://172.20.0.1:23000"
+    maestro_api_key: str = ""
+    nats_url: str = "nats://localhost:4222"
+    hermes_port: int = 8080
+    webhook_secret: str = ""
 
 
 settings = Settings()

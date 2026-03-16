@@ -18,6 +18,8 @@ _SUBSCRIBED_EVENTS: list[str] = [
     "agent.deleted",
     "agent.updated",
     "task.updated",
+    "task.completed",
+    "task.failed",
 ]
 
 

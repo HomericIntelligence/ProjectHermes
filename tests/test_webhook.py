@@ -2,20 +2,32 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac as hmac_mod
+import json
 import sys
 import os
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+# Fixed secret used across all webhook tests
+_TEST_SECRET = "test-webhook-secret"
+
+
+def _sign(body: bytes) -> str:
+    """Compute HMAC-SHA256 hex digest for the given body using _TEST_SECRET."""
+    return hmac_mod.new(_TEST_SECRET.encode(), body, hashlib.sha256).hexdigest()
+
 
 def _build_client() -> TestClient:
-    """Build a TestClient with a mocked Publisher injected into app.state."""
+    """Build a TestClient with a mocked Publisher and a known webhook secret."""
     from hermes.server import app
     from hermes.publisher import Publisher
+    from hermes.config import settings
 
     mock_publisher = MagicMock(spec=Publisher)
     mock_publisher.is_connected = True
@@ -24,6 +36,8 @@ def _build_client() -> TestClient:
 
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
+    # Set a known secret so tests can compute valid signatures
+    settings.webhook_secret = _TEST_SECRET
     return TestClient(app, raise_server_exceptions=True)
 
 
@@ -52,17 +66,41 @@ class TestWebhookEndpoint:
             "data": {"host": "localhost", "name": "bot"},
             "timestamp": "2026-03-15T00:00:00Z",
         }
-        response = client.post("/webhook", json=payload)
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
         assert response.status_code == 202
 
     def test_webhook_invalid_payload_returns_422(self) -> None:
         client = _build_client()
-        response = client.post("/webhook", json={"bad": "payload"})
+        body_bytes = json.dumps({"bad": "payload"}).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
         assert response.status_code == 422
 
     def test_webhook_missing_body_returns_422(self) -> None:
         client = _build_client()
-        response = client.post("/webhook", content=b"not json", headers={"Content-Type": "application/json"})
+        body_bytes = b"not json"
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
         assert response.status_code == 422
 
     def test_webhook_returns_event_name(self) -> None:
@@ -72,8 +110,35 @@ class TestWebhookEndpoint:
             "data": {"team_id": "t1", "task_id": "task-1"},
             "timestamp": "2026-03-15T00:00:00Z",
         }
-        body = client.post("/webhook", json=payload).json()
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        body = response.json()
         assert body["event"] == "task.updated"
+
+    def test_webhook_bad_signature_returns_401(self) -> None:
+        client = _build_client()
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": "bad-signature",
+            },
+        )
+        assert response.status_code == 401
 
 
 class TestSubjectsEndpoint:
