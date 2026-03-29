@@ -21,7 +21,7 @@ _TASK_EVENTS = {"task.updated", "task.completed", "task.failed"}
 
 
 class Publisher:
-    """Publishes ai-maestro webhook payloads to NATS JetStream."""
+    """Publishes external webhook payloads to NATS JetStream."""
 
     def __init__(self) -> None:
         self._nc: NATSClient | None = None
