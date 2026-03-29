@@ -1,7 +1,7 @@
 [workspace]
 name = "project-hermes"
 version = "0.1.0"
-description = "Bridges ai-maestro webhooks to NATS JetStream for pub/sub fan-out and event replay"
+description = "Bridges external webhooks to NATS JetStream for pub/sub fan-out and event replay"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
