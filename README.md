@@ -1,17 +1,17 @@
 # ProjectHermes
 
-ProjectHermes bridges [ai-maestro](https://github.com/HomericIntelligence/ai-maestro) webhooks to [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream) for pub/sub fan-out and event replay across the HomericIntelligence ecosystem.
+ProjectHermes bridges external webhooks (GitHub, Slack, third-party APIs) to [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream) for pub/sub fan-out and event replay across the HomericIntelligence ecosystem.
 
 ## Purpose
 
-ai-maestro fires HTTP webhooks when agents and tasks change state. Hermes receives those webhooks, validates them, and publishes structured messages to NATS subjects. Downstream services (Argus, Keystone, Telemachy) subscribe to relevant subjects and react accordingly. JetStream provides durable storage so late-joining subscribers can replay missed events.
+External services fire HTTP webhooks when events occur. Hermes receives those webhooks, validates them, and publishes structured messages to NATS subjects. Downstream services (Argus, Agamemnon, Telemachy) subscribe to relevant subjects and react accordingly. JetStream provides durable storage so late-joining subscribers can replay missed events.
 
 ```
-ai-maestro ──HTTP POST /webhook──► Hermes ──publish──► NATS JetStream
-                                                              │
-                              ┌───────────────────────────────┤
-                              ▼               ▼               ▼
-                            Argus         Keystone       Telemachy
+External Service ──HTTP POST /webhook──► Hermes ──publish──► NATS JetStream
+                                                                    │
+                              ┌─────────────────────────────────────┤
+                              ▼               ▼                     ▼
+                            Argus         Agamemnon             Telemachy
 ```
 
 ## Quick Start
@@ -29,17 +29,13 @@ just health
 
 ## Integration
 
-Register Hermes as a webhook receiver with ai-maestro:
+External services (GitHub, Slack, etc.) should configure their webhooks to POST directly to Hermes:
 
-```bash
-just register-webhook
+```
+POST http://<hermes-host>:<HERMES_PORT>/webhook
 ```
 
-This calls `POST /api/webhooks` on the ai-maestro instance and subscribes to:
-- `agent.created`
-- `agent.deleted`
-- `agent.updated`
-- `task.updated`
+Hermes validates the HMAC signature (`WEBHOOK_SECRET`) and publishes the event to NATS JetStream.
 
 ## Subject Schema
 
@@ -65,7 +61,7 @@ hi.tasks.{team_id}.{task_id}.{event}
 
 | Token   | Description                             |
 |---------|-----------------------------------------|
-| team_id | ai-maestro team identifier              |
+| team_id | Team identifier                         |
 | task_id | Unique task identifier                  |
 | event   | updated, completed, failed              |
 
@@ -79,13 +75,11 @@ Copy `.env.example` to `.env` and fill in values:
 cp .env.example .env
 ```
 
-| Variable        | Default                        | Description                       |
-|-----------------|--------------------------------|-----------------------------------|
-| MAESTRO_URL     | http://172.20.0.1:23000        | ai-maestro base URL               |
-| MAESTRO_API_KEY |                                | API key for ai-maestro auth       |
-| NATS_URL        | nats://localhost:4222          | NATS server URL                   |
-| HERMES_PORT     | 8080                           | Port Hermes listens on            |
-| WEBHOOK_SECRET  |                                | HMAC secret for webhook validation|
+| Variable       | Default               | Description                        |
+|----------------|-----------------------|------------------------------------|
+| NATS_URL       | nats://localhost:4222 | NATS server URL                    |
+| HERMES_PORT    | 8080                  | Port Hermes listens on             |
+| WEBHOOK_SECRET |                       | HMAC secret for webhook validation |
 
 ## Development
 

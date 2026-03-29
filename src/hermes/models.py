@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 
 class WebhookPayload(BaseModel):
-    """Incoming webhook payload from ai-maestro."""
+    """Incoming webhook payload from an external service."""
 
     event: str
     data: dict[str, Any]

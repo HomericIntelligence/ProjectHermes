@@ -1,6 +1,5 @@
 # === Variables ===
 
-MAESTRO_URL := env_var_or_default("MAESTRO_URL", "http://172.20.0.1:23000")
 NATS_URL    := env_var_or_default("NATS_URL", "nats://localhost:4222")
 HERMES_PORT := env_var_or_default("HERMES_PORT", "8080")
 
@@ -25,7 +24,7 @@ health:
 
 # === Integration ===
 
-# Register Hermes as a webhook receiver with ai-maestro
+# Point external services at POST /webhook directly
 register-webhook:
     bash scripts/register-webhooks.sh
 

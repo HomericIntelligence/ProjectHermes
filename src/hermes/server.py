@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="ProjectHermes",
-    description="Bridges ai-maestro webhooks to NATS JetStream.",
+    description="Bridges external webhooks to NATS JetStream.",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -65,7 +65,7 @@ async def health() -> dict[str, object]:
 
 @app.post("/webhook", status_code=status.HTTP_202_ACCEPTED)
 async def receive_webhook(request: Request) -> dict[str, str]:
-    """Receive an ai-maestro webhook, validate its signature, and publish to NATS."""
+    """Receive an external webhook, validate its signature, and publish to NATS."""
     raw_body = await request.body()
 
     # HMAC validation (skipped when no secret is configured)

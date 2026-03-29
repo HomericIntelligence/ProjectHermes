@@ -14,8 +14,6 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    maestro_url: str = "http://172.20.0.1:23000"
-    maestro_api_key: str = ""
     nats_url: str = "nats://localhost:4222"
     hermes_port: int = 8080
     webhook_secret: str = ""
