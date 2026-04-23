@@ -48,6 +48,7 @@ class HealthResponse(BaseModel):
     nats_connected: bool
     shutting_down: bool = False
     hmac_validation_enabled: bool = False
+    hermes_public_url: str | None = None
 
 
 class WebhookAcceptedResponse(BaseModel):

@@ -70,6 +70,11 @@ class TestHealthEndpoint:
         body = client.get("/health").json()
         assert "nats_connected" in body
 
+    def test_health_includes_hermes_public_url(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "hermes_public_url" in body
+
     def test_health_returns_503_when_nats_disconnected(self) -> None:
         client = _build_client_disconnected()
         response = client.get("/health")

@@ -33,11 +33,12 @@ NATS JetStream (via ProjectKeystone)
 
 ## Configuration
 
-| Variable       | Default               | Description                        |
-|----------------|-----------------------|------------------------------------|
-| NATS_URL       | nats://localhost:4222 | NATS server URL                    |
-| HERMES_PORT    | 8080                  | Port Hermes listens on             |
-| WEBHOOK_SECRET |                       | HMAC secret for webhook validation |
+| Variable          | Default                        | Description                                             |
+|-------------------|--------------------------------|---------------------------------------------------------|
+| NATS_URL          | nats://localhost:4222          | NATS server URL                                         |
+| HERMES_PORT       | 8080                           | Port Hermes listens on                                  |
+| HERMES_PUBLIC_URL | http://localhost:{HERMES_PORT} | Externally-reachable base URL for the /webhook endpoint |
+| WEBHOOK_SECRET    |                                | HMAC secret for webhook validation                      |
 
 Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webhook`.
 

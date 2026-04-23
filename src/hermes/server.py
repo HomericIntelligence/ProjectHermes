@@ -204,11 +204,13 @@ async def health(response: Response) -> HealthResponse:
     connected = publisher.is_connected
     if not connected:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    cfg = get_settings()
     return HealthResponse(
         status="ok" if connected else "degraded",
         nats_connected=connected,
         shutting_down=_shutdown_event.is_set(),
-        hmac_validation_enabled=bool(get_settings().webhook_secret),
+        hmac_validation_enabled=bool(cfg.webhook_secret),
+        hermes_public_url=cfg.hermes_public_url,
     )
 
 
@@ -296,9 +298,10 @@ def _log_startup_banner(publisher: Publisher, settings: Settings | None = None) 
         settings = get_settings()
     logger.info("hermes version=%s", __version__)
     logger.info(
-        "config nats_url=%s port=%s",
+        "config nats_url=%s port=%s public_url=%s",
         settings.nats_url,
         settings.hermes_port,
+        settings.hermes_public_url,
     )
     logger.info(
         "secrets webhook_secret=%s",

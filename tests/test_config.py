@@ -1,4 +1,4 @@
-"""Tests for Settings configuration, focusing on HERMES_HOST."""
+"""Tests for Settings configuration."""
 
 from __future__ import annotations
 
@@ -40,3 +40,29 @@ class TestHermesHostDefault:
 
         s = Settings()
         assert s.hermes_host != "0.0.0.0"
+
+
+class TestHermesPublicUrl:
+    def test_public_url_defaults_to_localhost_port(self) -> None:
+        from hermes.config import Settings
+
+        s = Settings(hermes_port=8080, _env_file=None)
+        assert s.hermes_public_url == "http://localhost:8080"
+
+    def test_public_url_respects_custom_port(self) -> None:
+        from hermes.config import Settings
+
+        s = Settings(hermes_port=9000, _env_file=None)
+        assert s.hermes_public_url == "http://localhost:9000"
+
+    def test_public_url_explicit_override(self) -> None:
+        from hermes.config import Settings
+
+        s = Settings(hermes_public_url="https://hermes.example.com", _env_file=None)
+        assert s.hermes_public_url == "https://hermes.example.com"
+
+    def test_public_url_explicit_override_ignores_port(self) -> None:
+        from hermes.config import Settings
+
+        s = Settings(hermes_port=9090, hermes_public_url="https://hermes.example.com", _env_file=None)
+        assert s.hermes_public_url == "https://hermes.example.com"

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Optional
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _MIN_SECRET_LENGTH = 32
@@ -22,12 +23,19 @@ class Settings(BaseSettings):
     nats_url: str = "nats://localhost:4222"
     hermes_host: str = "127.0.0.1"
     hermes_port: int = 8080
+    hermes_public_url: Optional[str] = None
     webhook_secret: str = ""
     nats_connect_timeout: float = 5.0
     nats_publish_timeout: float = 5.0
     agamemnon_timeout: float = 10.0
     shutdown_timeout: float = 10.0
     enable_dead_letter: bool = True
+
+    @model_validator(mode="after")
+    def _set_public_url_default(self) -> "Settings":
+        if self.hermes_public_url is None:
+            self.hermes_public_url = f"http://localhost:{self.hermes_port}"
+        return self
 
     @field_validator("webhook_secret")
     @classmethod
