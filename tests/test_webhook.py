@@ -279,3 +279,44 @@ class TestOpenAPISchema:
         response_codes = set(webhook_path["responses"].keys())
         assert "401" in response_codes
         assert "503" in response_codes
+
+
+class TestDeadLetterIntegration:
+    """Integration tests verifying unroutable events reach the publisher."""
+
+    def test_unroutable_event_returns_202(self) -> None:
+        client = _build_client()
+        payload = {
+            "event": "team.created",
+            "data": {"teamId": "alpha"},
+            "timestamp": "2026-04-22T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code == 202
+
+    def test_unroutable_event_calls_publish(self) -> None:
+        client = _build_client()
+        payload = {
+            "event": "sprint.started",
+            "data": {},
+            "timestamp": "2026-04-22T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        from hermes.server import app
+        app.state.publisher.publish.assert_awaited_once()

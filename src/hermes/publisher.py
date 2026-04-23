@@ -20,14 +20,18 @@ _AGENT_EVENTS = {"agent.created", "agent.updated", "agent.deleted"}
 _TASK_EVENTS = {"task.updated", "task.completed", "task.failed"}
 
 
+_DEAD_LETTER_SUBJECT_PREFIX = "hi.deadletter"
+
+
 class Publisher:
     """Publishes external webhook payloads to NATS JetStream."""
 
-    def __init__(self) -> None:
+    def __init__(self, enable_dead_letter: bool = True) -> None:
         self._nc: NATSClient | None = None
         self._js: JetStreamContext | None = None
         self._active_subjects: set[str] = set()
         self._stream_names: list[str] = []
+        self._enable_dead_letter = enable_dead_letter
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -46,8 +50,9 @@ class Publisher:
         from nats.js.errors import NotFoundError
         jsm = self._nc.jsm()
         for name, subjects in (
-            ("homeric-agents", ["hi.agents.>"]),
-            ("homeric-tasks",  ["hi.tasks.>"]),
+            ("homeric-agents",      ["hi.agents.>"]),
+            ("homeric-tasks",       ["hi.tasks.>"]),
+            ("homeric-deadletter",  ["hi.deadletter.>"]),
         ):
             try:
                 await jsm.stream_info(name)
@@ -86,9 +91,6 @@ class Publisher:
             raise RuntimeError("Publisher is not connected to NATS")
 
         subject = self._resolve_subject(payload)
-        if subject is None:
-            logger.warning("No subject mapping for event type %r; dropping", payload.event)
-            return
 
         message = json.dumps(
             {
@@ -97,6 +99,20 @@ class Publisher:
                 "timestamp": payload.timestamp,
             }
         ).encode()
+
+        if subject is None:
+            if self._enable_dead_letter:
+                dead_subject = f"{_DEAD_LETTER_SUBJECT_PREFIX}.{_slug(payload.event)}"
+                await self._js.publish(dead_subject, message, timeout=publish_timeout)
+                self._active_subjects.add(dead_subject)
+                logger.warning(
+                    "No subject mapping for event type %r; dead-lettered to %s",
+                    payload.event,
+                    dead_subject,
+                )
+            else:
+                logger.warning("No subject mapping for event type %r; dropping", payload.event)
+            return
 
         await self._js.publish(subject, message, timeout=publish_timeout)
         self._active_subjects.add(subject)

@@ -38,7 +38,7 @@ _NATS_RETRY_INTERVAL = 5
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Connect to NATS on startup with retries; abort startup if all attempts fail."""
     settings = get_settings()
-    publisher = Publisher()
+    publisher = Publisher(enable_dead_letter=settings.enable_dead_letter)
     last_exc: Exception | None = None
     for attempt in range(1, _NATS_RETRY_ATTEMPTS + 1):
         try:
