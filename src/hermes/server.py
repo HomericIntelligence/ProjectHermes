@@ -82,9 +82,10 @@ async def receive_webhook(request: Request, settings: SettingsDep) -> dict[str, 
     try:
         payload = WebhookPayload.model_validate_json(raw_body)
     except Exception as exc:
+        logger.warning("Invalid webhook payload: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid payload: {exc}",
+            detail="Invalid payload format",
         ) from exc
 
     publisher: Publisher = app.state.publisher

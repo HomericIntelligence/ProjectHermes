@@ -172,6 +172,37 @@ class TestWebhookEndpoint:
         assert response.status_code == 503
 
 
+    def test_webhook_invalid_payload_does_not_leak_exception_details(self) -> None:
+        client = _build_client()
+        body_bytes = json.dumps({"bad": "payload"}).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        detail = response.json().get("detail", "")
+        assert detail == "Invalid payload format"
+        assert "validation" not in detail.lower()
+        assert "field" not in detail.lower()
+
+    def test_webhook_malformed_json_does_not_leak_exception_details(self) -> None:
+        client = _build_client()
+        body_bytes = b"{not valid json}"
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        detail = response.json().get("detail", "")
+        assert detail == "Invalid payload format"
+
+
 class TestSubjectsEndpoint:
     def test_subjects_returns_list(self) -> None:
         client = _build_client()
