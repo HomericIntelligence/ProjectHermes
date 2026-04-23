@@ -181,5 +181,12 @@ class Publisher:
 # ------------------------------------------------------------------
 
 def _slug(value: str) -> str:
-    """Sanitise a token for use in a NATS subject (replace spaces/dots)."""
-    return str(value).replace(" ", "-").replace(".", "-").lower()
+    """Sanitise a token for use in a NATS subject (replace spaces/dots/wildcards)."""
+    return (
+        str(value)
+        .replace(" ", "-")
+        .replace(".", "-")
+        .replace("*", "")
+        .replace(">", "")
+        .lower()
+    )

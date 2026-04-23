@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from nats.js.errors import NotFoundError
 
-from hermes.publisher import Publisher
+from hermes.publisher import Publisher, _slug
 
 
 def _make_publisher() -> Publisher:
@@ -147,3 +147,37 @@ class TestEnsureStreams:
             await pub._ensure_streams()
 
         assert jsm.add_stream.call_count == 0
+
+
+class TestSlugSanitisation:
+    """Unit tests for the _slug() helper covering wildcard sanitisation."""
+
+    def test_wildcard_star_is_removed(self) -> None:
+        assert "*" not in _slug("test*")
+
+    def test_wildcard_gt_is_removed(self) -> None:
+        assert ">" not in _slug("all>")
+
+    def test_wildcards_mixed_with_spaces(self) -> None:
+        result = _slug("my *agent >")
+        assert "*" not in result
+        assert ">" not in result
+        assert result == "my-agent-"
+
+    def test_wildcard_star_full_subject(self) -> None:
+        pub = _make_publisher()
+        subject = pub._parse_agent_subject(
+            {"host": "myhost", "name": "test*"},
+            "agent.created",
+        )
+        assert "*" not in subject
+        assert subject == "hi.agents.myhost.test.created"
+
+    def test_wildcard_gt_full_subject(self) -> None:
+        pub = _make_publisher()
+        subject = pub._parse_agent_subject(
+            {"host": "myhost", "name": "all>"},
+            "agent.created",
+        )
+        assert ">" not in subject
+        assert subject == "hi.agents.myhost.all.created"
