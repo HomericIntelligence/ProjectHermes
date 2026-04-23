@@ -1,0 +1,34 @@
+services:
+  nats:
+    image: nats:latest
+    command: ["--jetstream", "--store_dir", "/data"]
+    ports:
+      - "4222:4222"
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD", "nats-server", "--help"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  hermes:
+    build: .
+    ports:
+      - "${HERMES_PORT:-8080}:8080"
+    environment:
+      - NATS_URL=nats://nats:4222
+      - HERMES_PORT=8080
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  nats-data:

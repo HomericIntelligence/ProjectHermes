@@ -44,6 +44,29 @@ lint:
 format:
     pixi run ruff format src tests
 
+# === Docker ===
+
+# Build the Docker image
+docker-build tag="hermes:latest":
+    docker build -t {{tag}} .
+
+# Run the Docker container (requires NATS running separately)
+docker-run tag="hermes:latest":
+    docker run --rm \
+        -p {{HERMES_PORT}}:8080 \
+        -e NATS_URL={{NATS_URL}} \
+        -e HERMES_PORT=8080 \
+        -e WEBHOOK_SECRET="${WEBHOOK_SECRET:-}" \
+        {{tag}}
+
+# Start Hermes + NATS together via docker-compose
+docker-up:
+    docker compose up --build
+
+# Stop and remove docker-compose containers
+docker-down:
+    docker compose down
+
 # === NATS ===
 
 # Start NATS server (uses Odysseus config if available, otherwise embedded defaults)
