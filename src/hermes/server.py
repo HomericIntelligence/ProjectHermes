@@ -99,6 +99,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _shutdown_event = asyncio.Event()
     _inflight = 0
 
+    if not settings.webhook_secret:
+        logger.warning(
+            "HMAC webhook validation is DISABLED — set WEBHOOK_SECRET to enable signature verification"
+        )
+
     _log_startup_banner(publisher, settings)
     app.state.publisher = publisher
     yield
@@ -200,6 +205,7 @@ async def health() -> HealthResponse:
         status="ok",
         nats_connected=publisher.is_connected,
         shutting_down=_shutdown_event.is_set(),
+        hmac_validation_enabled=bool(get_settings().webhook_secret),
     )
 
 

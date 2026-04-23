@@ -47,6 +47,7 @@ class HealthResponse(BaseModel):
     status: str
     nats_connected: bool
     shutting_down: bool = False
+    hmac_validation_enabled: bool = False
 
 
 class WebhookAcceptedResponse(BaseModel):

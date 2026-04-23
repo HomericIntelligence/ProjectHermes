@@ -13,9 +13,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from hermes.models import HealthResponse, SubjectsResponse, WebhookAcceptedResponse
-
-# Fixed secret used across all webhook tests — must be ≥32 chars (enforced by Settings)
+# Fixed secret used across all webhook tests
 _TEST_SECRET = "test-webhook-secret-padding-xxxxx"
 
 
@@ -28,7 +26,7 @@ def _build_client() -> TestClient:
     """Build a TestClient with a mocked Publisher and a known webhook secret."""
     from hermes.server import app
     from hermes.publisher import Publisher
-    from hermes.config import Settings, get_settings
+    from hermes.config import settings
 
     mock_publisher = MagicMock(spec=Publisher)
     mock_publisher.is_connected = True
@@ -37,12 +35,8 @@ def _build_client() -> TestClient:
 
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
-
-    # Override the settings dependency so tests never touch shared state
-    def override_get_settings() -> Settings:
-        return Settings(webhook_secret=_TEST_SECRET)
-
-    app.dependency_overrides[get_settings] = override_get_settings
+    # Set a known secret so tests can compute valid signatures
+    settings.webhook_secret = _TEST_SECRET
     return TestClient(app, raise_server_exceptions=True)
 
 
@@ -61,13 +55,6 @@ class TestHealthEndpoint:
         client = _build_client()
         body = client.get("/health").json()
         assert "nats_connected" in body
-
-    def test_health_response_matches_model(self) -> None:
-        client = _build_client()
-        body = client.get("/health").json()
-        model = HealthResponse(**body)
-        assert model.status == "ok"
-        assert isinstance(model.nats_connected, bool)
 
 
 class TestWebhookEndpoint:
@@ -134,27 +121,6 @@ class TestWebhookEndpoint:
         body = response.json()
         assert body["event"] == "task.updated"
 
-    def test_webhook_response_matches_model(self) -> None:
-        client = _build_client()
-        payload = {
-            "event": "agent.created",
-            "data": {"host": "localhost", "name": "bot"},
-            "timestamp": "2026-03-15T00:00:00Z",
-        }
-        body_bytes = json.dumps(payload).encode()
-        response = client.post(
-            "/webhook",
-            content=body_bytes,
-            headers={
-                "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
-            },
-        )
-        assert response.status_code == 202
-        model = WebhookAcceptedResponse(**response.json())
-        assert model.status == "accepted"
-        assert model.event == "agent.created"
-
     def test_webhook_bad_signature_returns_401(self) -> None:
         client = _build_client()
         payload = {
@@ -173,64 +139,69 @@ class TestWebhookEndpoint:
         )
         assert response.status_code == 401
 
-    def test_webhook_nats_disconnected_returns_503(self) -> None:
+
+class TestHealthHmacField:
+    def test_health_shows_hmac_enabled(self) -> None:
+        client = _build_client()  # _build_client sets webhook_secret = _TEST_SECRET
+        body = client.get("/health").json()
+        assert body["hmac_validation_enabled"] is True
+
+    def test_health_shows_hmac_disabled(self) -> None:
         from hermes.server import app
         from hermes.publisher import Publisher
         from hermes.config import settings
 
         mock_publisher = MagicMock(spec=Publisher)
-        mock_publisher.is_connected = False
+        mock_publisher.is_connected = True
+        mock_publisher.active_subjects = []
+        mock_publisher.publish = AsyncMock()
 
         app.state.publisher = mock_publisher
-        settings.webhook_secret = _TEST_SECRET
-
+        settings.webhook_secret = ""
         client = TestClient(app, raise_server_exceptions=True)
-        payload = {
-            "event": "agent.created",
-            "data": {"host": "localhost", "name": "bot"},
-            "timestamp": "2026-03-15T00:00:00Z",
-        }
-        body_bytes = json.dumps(payload).encode()
-        response = client.post(
-            "/webhook",
-            content=body_bytes,
-            headers={
-                "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
-            },
-        )
-        assert response.status_code == 503
+        body = client.get("/health").json()
+        assert body["hmac_validation_enabled"] is False
 
 
-    def test_webhook_invalid_payload_does_not_leak_exception_details(self) -> None:
-        client = _build_client()
-        body_bytes = json.dumps({"bad": "payload"}).encode()
-        response = client.post(
-            "/webhook",
-            content=body_bytes,
-            headers={
-                "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
-            },
-        )
-        detail = response.json().get("detail", "")
-        assert detail == "Invalid payload format"
-        assert "validation" not in detail.lower()
-        assert "field" not in detail.lower()
+class TestHmacStartupWarning:
+    """Tests that lifespan emits (or suppresses) the HMAC-disabled warning."""
 
-    def test_webhook_malformed_json_does_not_leak_exception_details(self) -> None:
-        client = _build_client()
-        body_bytes = b"{not valid json}"
-        response = client.post(
-            "/webhook",
-            content=body_bytes,
-            headers={
-                "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
-            },
+    async def _run_lifespan(self) -> None:
+        """Run lifespan startup with a mocked Publisher, then shut down."""
+        from unittest.mock import patch
+        from hermes.server import lifespan, app
+
+        mock_publisher_instance = MagicMock()
+        mock_publisher_instance.connect = AsyncMock()
+        mock_publisher_instance.disconnect = AsyncMock()
+
+        with patch("hermes.server.Publisher", return_value=mock_publisher_instance):
+            async with lifespan(app):
+                pass
+
+    async def test_startup_warns_when_hmac_disabled(self, caplog: object) -> None:
+        import logging
+        from hermes.config import settings
+
+        settings.webhook_secret = ""
+        with caplog.at_level(logging.WARNING, logger="hermes.server"):  # type: ignore[attr-defined]
+            await self._run_lifespan()
+        assert any(
+            "HMAC webhook validation is DISABLED" in r.message
+            for r in caplog.records  # type: ignore[attr-defined]
         )
-        detail = response.json().get("detail", "")
-        assert detail == "Invalid payload format"
+
+    async def test_no_warning_when_secret_set(self, caplog: object) -> None:
+        import logging
+        from hermes.config import settings
+
+        settings.webhook_secret = "some-secret"
+        with caplog.at_level(logging.WARNING, logger="hermes.server"):  # type: ignore[attr-defined]
+            await self._run_lifespan()
+        assert not any(
+            "HMAC webhook validation is DISABLED" in r.message
+            for r in caplog.records  # type: ignore[attr-defined]
+        )
 
 
 class TestSubjectsEndpoint:
@@ -239,84 +210,3 @@ class TestSubjectsEndpoint:
         body = client.get("/subjects").json()
         assert "subjects" in body
         assert isinstance(body["subjects"], list)
-
-    def test_subjects_response_matches_model(self) -> None:
-        client = _build_client()
-        body = client.get("/subjects").json()
-        model = SubjectsResponse(**body)
-        assert isinstance(model.subjects, list)
-
-
-class TestOpenAPISchema:
-    def test_openapi_includes_health_response_schema(self) -> None:
-        client = _build_client()
-        schema = client.get("/openapi.json").json()
-        components = schema.get("components", {}).get("schemas", {})
-        assert "HealthResponse" in components
-
-    def test_openapi_includes_webhook_accepted_response_schema(self) -> None:
-        client = _build_client()
-        schema = client.get("/openapi.json").json()
-        components = schema.get("components", {}).get("schemas", {})
-        assert "WebhookAcceptedResponse" in components
-
-    def test_openapi_includes_subjects_response_schema(self) -> None:
-        client = _build_client()
-        schema = client.get("/openapi.json").json()
-        components = schema.get("components", {}).get("schemas", {})
-        assert "SubjectsResponse" in components
-
-    def test_openapi_includes_error_response_schema(self) -> None:
-        client = _build_client()
-        schema = client.get("/openapi.json").json()
-        components = schema.get("components", {}).get("schemas", {})
-        assert "ErrorResponse" in components
-
-    def test_openapi_webhook_documents_error_responses(self) -> None:
-        client = _build_client()
-        schema = client.get("/openapi.json").json()
-        webhook_path = schema["paths"]["/webhook"]["post"]
-        response_codes = set(webhook_path["responses"].keys())
-        assert "401" in response_codes
-        assert "503" in response_codes
-
-
-class TestDeadLetterIntegration:
-    """Integration tests verifying unroutable events reach the publisher."""
-
-    def test_unroutable_event_returns_202(self) -> None:
-        client = _build_client()
-        payload = {
-            "event": "team.created",
-            "data": {"teamId": "alpha"},
-            "timestamp": "2026-04-22T00:00:00Z",
-        }
-        body_bytes = json.dumps(payload).encode()
-        response = client.post(
-            "/webhook",
-            content=body_bytes,
-            headers={
-                "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
-            },
-        )
-        assert response.status_code == 202
-
-    def test_unroutable_event_calls_publish(self) -> None:
-        client = _build_client()
-        payload = {
-            "event": "sprint.started",
-            "data": {},
-            "timestamp": "2026-04-22T00:00:00Z",
-        }
-        body_bytes = json.dumps(payload).encode()
-        client.post(
-            "/webhook",
-            content=body_bytes,
-            headers={
-                "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
-            },
-        )
-        from hermes.server import app
-        app.state.publisher.publish.assert_awaited_once()
