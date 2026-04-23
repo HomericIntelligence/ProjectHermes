@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class WebhookPayload(BaseModel):
-    """Incoming webhook payload from an external service."""
+class HermesEventBase(BaseModel):
+    """Shared base for all NATS wire-format event models."""
 
-    event: str
-    data: dict[str, Any]
-    timestamp: str
-    signature: str | None = None
+    model_config = ConfigDict(frozen=True)
+
+    schema_version: int = Field(default=1, ge=1, description="Wire format schema version")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class AgentEvent(BaseModel):
+class AgentEvent(HermesEventBase):
     """Structured representation of an agent lifecycle event."""
 
     host: str
@@ -26,7 +27,7 @@ class AgentEvent(BaseModel):
     metadata: dict[str, Any] = {}
 
 
-class TaskEvent(BaseModel):
+class TaskEvent(HermesEventBase):
     """Structured representation of a task state-change event."""
 
     team_id: str
@@ -34,6 +35,15 @@ class TaskEvent(BaseModel):
     event: str
     status: str
     metadata: dict[str, Any] = {}
+
+
+class WebhookPayload(BaseModel):
+    """Incoming webhook payload from an external service (inbound DTO)."""
+
+    event: str
+    data: dict[str, Any]
+    timestamp: datetime
+    signature: str | None = None
 
 
 # ---------------------------------------------------------------------------
