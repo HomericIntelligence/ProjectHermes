@@ -62,10 +62,18 @@ class Publisher:
                 logger.info("Created JetStream stream: %s (%s)", name, subjects)
             self._stream_names.append(name)
 
-    async def disconnect(self) -> None:
-        """Drain and close the NATS connection."""
+    async def disconnect(self, drain_timeout: float | None = None) -> None:
+        """Drain and close the NATS connection.
+
+        Args:
+            drain_timeout: Maximum seconds to wait for drain to complete.
+                           None means no timeout (NATS default).
+        """
         if self._nc is not None:
-            await self._nc.drain()
+            kwargs: dict[str, object] = {}
+            if drain_timeout is not None:
+                kwargs["timeout"] = drain_timeout
+            await self._nc.drain(**kwargs)
             self._nc = None
             self._js = None
             logger.info("Disconnected from NATS")
