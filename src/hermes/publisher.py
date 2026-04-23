@@ -23,9 +23,9 @@ from hermes.models import WebhookPayload
 logger = logging.getLogger(__name__)
 
 # Event types that map to agent subjects
-_AGENT_EVENTS = {"agent.created", "agent.updated", "agent.deleted"}
+AGENT_EVENTS: frozenset[str] = frozenset({"agent.created", "agent.updated", "agent.deleted"})
 # Event types that map to task subjects
-_TASK_EVENTS = {"task.updated", "task.completed", "task.failed"}
+TASK_EVENTS: frozenset[str] = frozenset({"task.updated", "task.completed", "task.failed"})
 
 
 _DEAD_LETTER_SUBJECT_PREFIX = "hi.deadletter"
@@ -182,9 +182,9 @@ class Publisher:
 
     def _resolve_subject(self, payload: WebhookPayload) -> str | None:
         """Return the NATS subject for a given webhook payload, or None."""
-        if payload.event in _AGENT_EVENTS:
+        if payload.event in AGENT_EVENTS:
             return self._parse_agent_subject(payload.data, payload.event)
-        if payload.event in _TASK_EVENTS:
+        if payload.event in TASK_EVENTS:
             return self._parse_task_subject(payload.data, payload.event)
         return None
 
