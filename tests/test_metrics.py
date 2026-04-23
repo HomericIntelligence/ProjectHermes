@@ -205,25 +205,14 @@ class TestPublisherDeadLetters:
 
 class TestPublisherSubjectCap:
     def test_active_subjects_does_not_exceed_max(self) -> None:
-        from hermes.publisher import Publisher, _MAX_SUBJECTS
+        from hermes.publisher import Publisher
 
-        pub = Publisher()
-        # Fill up to the cap
-        for i in range(_MAX_SUBJECTS):
-            pub._active_subjects.add(f"hi.agents.host.agent-{i}.created")
+        cap = 10
+        pub = Publisher(max_subjects=cap)
+        for i in range(cap + 5):
+            pub._track_subject(f"hi.agents.host.agent-{i}.created")
 
-        # The set is now at the cap; simulate a publish that would add a new subject
-        # Directly test the guard logic: adding when at cap should log warning and skip
-        before = len(pub._active_subjects)
-
-        # Simulate what publish() does for the subject tracking guard
-        new_subject = "hi.agents.host.new-agent.created"
-        if len(pub._active_subjects) >= _MAX_SUBJECTS:
-            pass  # Guard: should not add
-        else:
-            pub._active_subjects.add(new_subject)
-
-        assert len(pub._active_subjects) == before
+        assert len(pub._active_subjects) == cap
 
 
 # ---------------------------------------------------------------------------

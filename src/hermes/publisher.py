@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from typing import Any
 
 import nats
@@ -29,16 +29,18 @@ _TASK_EVENTS = {"task.updated", "task.completed", "task.failed"}
 
 
 _DEAD_LETTER_SUBJECT_PREFIX = "hi.deadletter"
-_MAX_SUBJECTS = 10_000
 
 
 class Publisher:
     """Publishes external webhook payloads to NATS JetStream."""
 
-    def __init__(self, enable_dead_letter: bool = True) -> None:
+    def __init__(self, enable_dead_letter: bool = True, max_subjects: int | None = None) -> None:
+        from hermes.config import get_settings
+
         self._nc: NATSClient | None = None
         self._js: JetStreamContext | None = None
-        self._active_subjects: set[str] = set()
+        self._max_subjects: int = max_subjects if max_subjects is not None else get_settings().active_subjects_max
+        self._active_subjects: OrderedDict[str, None] = OrderedDict()
         self._stream_names: list[str] = []
         self._dead_letters: deque[dict[str, Any]] = deque(maxlen=1000)
         self._enable_dead_letter = enable_dead_letter
@@ -146,11 +148,7 @@ class Publisher:
                 await self._js.publish(dead_subject, message, timeout=publish_timeout)
                 self._dead_letters.append({"event": payload.event, "subject": dead_subject})
                 DEAD_LETTERS.labels(event_type=payload.event).inc()
-                if len(self._active_subjects) < _MAX_SUBJECTS:
-                    self._active_subjects.add(dead_subject)
-                    ACTIVE_SUBJECTS.set(len(self._active_subjects))
-                else:
-                    logger.warning("active_subjects cap reached (%d); not tracking %s", _MAX_SUBJECTS, dead_subject)
+                self._track_subject(dead_subject)
                 logger.warning(
                     "No subject mapping for event type %r; dead-lettered to %s",
                     payload.event,
@@ -164,12 +162,19 @@ class Publisher:
         await self._js.publish(subject, message, timeout=publish_timeout)
         PUBLISH_LATENCY.observe(time.perf_counter() - t0)
         WEBHOOKS_PUBLISHED.labels(subject_prefix=subject.split(".")[1]).inc()
-        if len(self._active_subjects) < _MAX_SUBJECTS:
-            self._active_subjects.add(subject)
-            ACTIVE_SUBJECTS.set(len(self._active_subjects))
-        else:
-            logger.warning("active_subjects cap reached (%d); not tracking %s", _MAX_SUBJECTS, subject)
+        self._track_subject(subject)
         logger.info("Published to %s (request_id=%s)", subject, request_id)
+
+    def _track_subject(self, subject: str) -> None:
+        """Add subject to the LRU OrderedDict, evicting the oldest if at capacity."""
+        if subject in self._active_subjects:
+            self._active_subjects.move_to_end(subject)
+        else:
+            if len(self._active_subjects) >= self._max_subjects:
+                evicted, _ = self._active_subjects.popitem(last=False)
+                logger.warning("active_subjects LRU cap (%d) reached; evicted %s", self._max_subjects, evicted)
+            self._active_subjects[subject] = None
+        ACTIVE_SUBJECTS.set(len(self._active_subjects))
 
     # ------------------------------------------------------------------
     # Subject resolution

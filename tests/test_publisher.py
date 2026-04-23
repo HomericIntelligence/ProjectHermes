@@ -181,3 +181,58 @@ class TestSlugSanitisation:
         )
         assert ">" not in subject
         assert subject == "hi.agents.myhost.all.created"
+
+
+class TestActiveSubjectsBound:
+    """_active_subjects LRU bound behaviour."""
+
+    def _add_subject(self, pub: Publisher, subject: str) -> None:
+        """Directly insert a subject as if it had been published."""
+        pub._track_subject(subject)
+
+    def test_subjects_below_cap_are_all_retained(self) -> None:
+        pub = Publisher(max_subjects=5)
+        for i in range(5):
+            self._add_subject(pub, f"hi.tasks.team.task-{i}.updated")
+        assert len(pub.active_subjects) == 5
+
+    def test_oldest_evicted_when_cap_exceeded(self) -> None:
+        pub = Publisher(max_subjects=3)
+        for i in range(4):
+            self._add_subject(pub, f"hi.tasks.team.task-{i}.updated")
+        subjects = pub.active_subjects
+        assert len(subjects) == 3
+        assert "hi.tasks.team.task-0.updated" not in subjects
+
+    def test_republishing_existing_subject_does_not_evict(self) -> None:
+        pub = Publisher(max_subjects=3)
+        subjects_added = [f"hi.tasks.team.task-{i}.updated" for i in range(3)]
+        for s in subjects_added:
+            self._add_subject(pub, s)
+        self._add_subject(pub, subjects_added[0])
+        assert len(pub.active_subjects) == 3
+        assert subjects_added[0] in pub.active_subjects
+
+    def test_lru_promotes_on_repeat_and_evicts_next_oldest(self) -> None:
+        pub = Publisher(max_subjects=3)
+        s0, s1, s2 = "a", "b", "c"
+        for s in (s0, s1, s2):
+            self._add_subject(pub, s)
+        self._add_subject(pub, s0)
+        self._add_subject(pub, "d")
+        subjects = pub.active_subjects
+        assert s1 not in subjects
+        assert s0 in subjects
+
+    def test_active_subjects_returns_sorted_list(self) -> None:
+        pub = Publisher(max_subjects=10)
+        for s in ("z.subject", "a.subject", "m.subject"):
+            self._add_subject(pub, s)
+        assert pub.active_subjects == sorted(["z.subject", "a.subject", "m.subject"])
+
+    def test_custom_max_subjects_respected(self) -> None:
+        pub = Publisher(max_subjects=2)
+        assert pub._max_subjects == 2
+        for i in range(5):
+            self._add_subject(pub, f"subj-{i}")
+        assert len(pub.active_subjects) == 2
