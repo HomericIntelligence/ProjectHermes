@@ -34,3 +34,34 @@ class TaskEvent(BaseModel):
     event: str
     status: str
     metadata: dict[str, Any] = {}
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+
+class HealthResponse(BaseModel):
+    """Response body for GET /health."""
+
+    status: str
+    nats_connected: bool
+
+
+class WebhookAcceptedResponse(BaseModel):
+    """Response body for POST /webhook (202 Accepted)."""
+
+    status: str
+    event: str
+
+
+class SubjectsResponse(BaseModel):
+    """Response body for GET /subjects."""
+
+    subjects: list[str]
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response body."""
+
+    detail: str

@@ -13,6 +13,8 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from hermes.models import HealthResponse, SubjectsResponse, WebhookAcceptedResponse
+
 # Fixed secret used across all webhook tests
 _TEST_SECRET = "test-webhook-secret"
 
@@ -59,6 +61,13 @@ class TestHealthEndpoint:
         client = _build_client()
         body = client.get("/health").json()
         assert "nats_connected" in body
+
+    def test_health_response_matches_model(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        model = HealthResponse(**body)
+        assert model.status == "ok"
+        assert isinstance(model.nats_connected, bool)
 
 
 class TestWebhookEndpoint:
@@ -125,6 +134,27 @@ class TestWebhookEndpoint:
         body = response.json()
         assert body["event"] == "task.updated"
 
+    def test_webhook_response_matches_model(self) -> None:
+        client = _build_client()
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code == 202
+        model = WebhookAcceptedResponse(**response.json())
+        assert model.status == "accepted"
+        assert model.event == "agent.created"
+
     def test_webhook_bad_signature_returns_401(self) -> None:
         client = _build_client()
         payload = {
@@ -150,3 +180,43 @@ class TestSubjectsEndpoint:
         body = client.get("/subjects").json()
         assert "subjects" in body
         assert isinstance(body["subjects"], list)
+
+    def test_subjects_response_matches_model(self) -> None:
+        client = _build_client()
+        body = client.get("/subjects").json()
+        model = SubjectsResponse(**body)
+        assert isinstance(model.subjects, list)
+
+
+class TestOpenAPISchema:
+    def test_openapi_includes_health_response_schema(self) -> None:
+        client = _build_client()
+        schema = client.get("/openapi.json").json()
+        components = schema.get("components", {}).get("schemas", {})
+        assert "HealthResponse" in components
+
+    def test_openapi_includes_webhook_accepted_response_schema(self) -> None:
+        client = _build_client()
+        schema = client.get("/openapi.json").json()
+        components = schema.get("components", {}).get("schemas", {})
+        assert "WebhookAcceptedResponse" in components
+
+    def test_openapi_includes_subjects_response_schema(self) -> None:
+        client = _build_client()
+        schema = client.get("/openapi.json").json()
+        components = schema.get("components", {}).get("schemas", {})
+        assert "SubjectsResponse" in components
+
+    def test_openapi_includes_error_response_schema(self) -> None:
+        client = _build_client()
+        schema = client.get("/openapi.json").json()
+        components = schema.get("components", {}).get("schemas", {})
+        assert "ErrorResponse" in components
+
+    def test_openapi_webhook_documents_error_responses(self) -> None:
+        client = _build_client()
+        schema = client.get("/openapi.json").json()
+        webhook_path = schema["paths"]["/webhook"]["post"]
+        response_codes = set(webhook_path["responses"].keys())
+        assert "401" in response_codes
+        assert "503" in response_codes

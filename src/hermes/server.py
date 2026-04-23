@@ -12,7 +12,13 @@ from typing import Annotated, AsyncGenerator
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 
 from hermes.config import Settings, get_settings
-from hermes.models import WebhookPayload
+from hermes.models import (
+    ErrorResponse,
+    HealthResponse,
+    SubjectsResponse,
+    WebhookAcceptedResponse,
+    WebhookPayload,
+)
 from hermes.publisher import Publisher
 
 logger = logging.getLogger(__name__)
@@ -60,18 +66,28 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 # ---------------------------------------------------------------------------
 
 
-@app.get("/health")
-async def health() -> dict[str, object]:
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    responses={503: {"model": ErrorResponse, "description": "NATS not reachable"}},
+)
+async def health() -> HealthResponse:
     """Return service health and NATS connection status."""
     publisher: Publisher = app.state.publisher
-    return {
-        "status": "ok",
-        "nats_connected": publisher.is_connected,
-    }
+    return HealthResponse(status="ok", nats_connected=publisher.is_connected)
 
 
-@app.post("/webhook", status_code=status.HTTP_202_ACCEPTED)
-async def receive_webhook(request: Request, settings: SettingsDep) -> dict[str, str]:
+@app.post(
+    "/webhook",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=WebhookAcceptedResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid webhook signature"},
+        422: {"model": ErrorResponse, "description": "Malformed or invalid payload"},
+        503: {"model": ErrorResponse, "description": "NATS publisher not connected"},
+    },
+)
+async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcceptedResponse:
     """Receive an external webhook, validate its signature, and publish to NATS."""
     raw_body = await request.body()
 
@@ -96,14 +112,17 @@ async def receive_webhook(request: Request, settings: SettingsDep) -> dict[str, 
         )
 
     await publisher.publish(payload, publish_timeout=settings.nats_publish_timeout)
-    return {"status": "accepted", "event": payload.event}
+    return WebhookAcceptedResponse(status="accepted", event=payload.event)
 
 
-@app.get("/subjects")
-async def list_subjects() -> dict[str, list[str]]:
+@app.get(
+    "/subjects",
+    response_model=SubjectsResponse,
+)
+async def list_subjects() -> SubjectsResponse:
     """Return the list of NATS subjects that have been published to."""
     publisher: Publisher = app.state.publisher
-    return {"subjects": publisher.active_subjects}
+    return SubjectsResponse(subjects=publisher.active_subjects)
 
 
 # ---------------------------------------------------------------------------
