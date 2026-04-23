@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="ProjectHermes",
     description="Bridges external webhooks to NATS JetStream.",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
 )
 

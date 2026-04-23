@@ -1,3 +1,8 @@
 """ProjectHermes — external webhook to NATS JetStream bridge."""
 
-__version__ = "0.1.0"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("hermes")
+except PackageNotFoundError:
+    __version__ = "unknown"
