@@ -89,3 +89,11 @@ just test     # run tests
 just lint     # ruff check
 just format   # ruff format
 ```
+
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md). Do not open public issues for security vulnerabilities.
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
