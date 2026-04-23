@@ -76,11 +76,11 @@ Before starting work:
 
 ### 2. Branch Naming Convention
 
-Create a feature branch from `main`:
+Create a feature branch from `master`:
 
 ```bash
-git checkout main
-git pull origin main
+git checkout master
+git pull origin master
 git checkout -b <issue-number>-<short-description>
 
 # Examples:
@@ -181,7 +181,7 @@ just register-webhook
 ### Before You Start
 
 1. Ensure an issue exists for your work
-2. Create a branch from `main` using the naming convention
+2. Create a branch from `master` using the naming convention
 3. Implement your changes
 4. Run `just test` and `just lint` to verify
 
@@ -198,9 +198,22 @@ gh pr create --title "[Type] Brief description" --body "Closes #<issue-number>"
 - PR title should be clear and descriptive
 - Tests and linting must pass
 
-### Never Push Directly to Main
+### Branching Strategy
 
-The `main` branch is protected. All changes must go through pull requests.
+| Branch type | Naming convention | Base branch | Notes |
+|-------------|-------------------|-------------|-------|
+| Default | `master` | — | Protected; never push directly |
+| Feature / fix | `<issue>-<slug>` | `master` | e.g. `44-planning-templates` |
+| Release | `release/v<x.y.z>` | `master` | Created from `master` before tagging |
+
+**Merge strategy:**
+
+- Single-concern PRs: squash-and-merge
+- Multi-commit story-arc PRs: rebase-and-merge
+
+### Never Push Directly to Master
+
+The `master` branch is protected. All changes must go through pull requests.
 
 ## Code Review
 
