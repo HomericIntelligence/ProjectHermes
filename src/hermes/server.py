@@ -7,11 +7,11 @@ import hmac
 import logging
 import sys
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import Annotated, AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 
-from hermes.config import settings
+from hermes.config import Settings, get_settings
 from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
 
@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Connect to NATS on startup; disconnect cleanly on shutdown."""
+    settings = get_settings()
     publisher = Publisher()
     try:
         await publisher.connect(settings.nats_url)
@@ -47,6 +48,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -64,13 +71,13 @@ async def health() -> dict[str, object]:
 
 
 @app.post("/webhook", status_code=status.HTTP_202_ACCEPTED)
-async def receive_webhook(request: Request) -> dict[str, str]:
+async def receive_webhook(request: Request, settings: SettingsDep) -> dict[str, str]:
     """Receive an external webhook, validate its signature, and publish to NATS."""
     raw_body = await request.body()
 
     # HMAC validation (skipped when no secret is configured)
     if settings.webhook_secret:
-        _verify_signature(raw_body, request.headers.get("X-Webhook-Signature", ""))
+        _verify_signature(raw_body, request.headers.get("X-Webhook-Signature", ""), settings)
 
     try:
         payload = WebhookPayload.model_validate_json(raw_body)
@@ -104,7 +111,7 @@ async def list_subjects() -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 
-def _verify_signature(body: bytes, provided: str) -> None:
+def _verify_signature(body: bytes, provided: str, settings: Settings) -> None:
     """Raise HTTP 401 if the HMAC-SHA256 signature does not match."""
     expected = hmac.new(
         settings.webhook_secret.encode(),
@@ -126,8 +133,9 @@ if __name__ == "__main__":
     import uvicorn
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    _settings = get_settings()
     uvicorn.run(
         "hermes.server:app",
         host="0.0.0.0",
-        port=settings.hermes_port,
+        port=_settings.hermes_port,
     )

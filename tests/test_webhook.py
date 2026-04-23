@@ -26,7 +26,7 @@ def _build_client() -> TestClient:
     """Build a TestClient with a mocked Publisher and a known webhook secret."""
     from hermes.server import app
     from hermes.publisher import Publisher
-    from hermes.config import settings
+    from hermes.config import Settings, get_settings
 
     mock_publisher = MagicMock(spec=Publisher)
     mock_publisher.is_connected = True
@@ -35,8 +35,12 @@ def _build_client() -> TestClient:
 
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
-    # Set a known secret so tests can compute valid signatures
-    settings.webhook_secret = _TEST_SECRET
+
+    # Override the settings dependency so tests never touch shared state
+    def override_get_settings() -> Settings:
+        return Settings(webhook_secret=_TEST_SECRET)
+
+    app.dependency_overrides[get_settings] = override_get_settings
     return TestClient(app, raise_server_exceptions=True)
 
 
