@@ -30,9 +30,22 @@ register-webhook:
 
 # === Testing ===
 
-# Run the test suite
+# Run the full test suite (unit + integration)
 test:
     pixi run pytest
+
+# Run only unit tests (skip integration tests requiring NATS)
+test-unit:
+    pixi run pytest -m "not integration"
+
+# Run only integration tests (requires a running NATS server)
+test-integration:
+    pixi run pytest -m integration
+
+# Run tests and open HTML coverage report
+test-cov:
+    pixi run pytest --cov-report=html --cov-report=term-missing
+    @echo "Coverage report: htmlcov/index.html"
 
 # === Linting & Formatting ===
 

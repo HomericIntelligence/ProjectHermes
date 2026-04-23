@@ -20,6 +20,7 @@ httpx = "*"
 [feature.dev.pypi-dependencies]
 pytest = "*"
 pytest-asyncio = "*"
+pytest-cov = "*"
 httpx = "*"
 ruff = "*"
 mypy = "*"

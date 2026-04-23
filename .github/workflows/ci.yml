@@ -24,5 +24,36 @@ jobs:
       - name: Lint
         run: pixi run lint
 
-      - name: Test
-        run: pixi run test
+      - name: Unit tests (no NATS required)
+        run: pixi run pytest -m "not integration"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-html
+          path: htmlcov/
+
+  integration-test:
+    name: Integration Tests (NATS)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          cache: true
+
+      - name: Start NATS with JetStream
+        run: |
+          docker run -d --name nats-js -p 4222:4222 nats:latest -js
+          sleep 2
+
+      - name: Integration tests
+        env:
+          TEST_NATS_URL: nats://localhost:4222
+        run: pixi run pytest -m integration -v

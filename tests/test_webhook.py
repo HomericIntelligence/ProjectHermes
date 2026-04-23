@@ -143,6 +143,34 @@ class TestWebhookEndpoint:
         )
         assert response.status_code == 401
 
+    def test_webhook_nats_disconnected_returns_503(self) -> None:
+        from hermes.server import app
+        from hermes.publisher import Publisher
+        from hermes.config import settings
+
+        mock_publisher = MagicMock(spec=Publisher)
+        mock_publisher.is_connected = False
+
+        app.state.publisher = mock_publisher
+        settings.webhook_secret = _TEST_SECRET
+
+        client = TestClient(app, raise_server_exceptions=True)
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code == 503
+
 
 class TestSubjectsEndpoint:
     def test_subjects_returns_list(self) -> None:

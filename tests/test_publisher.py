@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import sys
 import os
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Ensure src is on the path when running directly
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
 
 
@@ -94,3 +98,125 @@ class TestTaskSubjectMapping:
             "task.updated",
         )
         assert subject == "hi.tasks.alpha.xyz.updated"
+
+
+class TestPublisherLifecycle:
+    """Publisher connect / disconnect / publish behavior with mocked NATS."""
+
+    async def test_connect_sets_is_connected(self) -> None:
+        mock_nc = MagicMock()
+        mock_nc.is_closed = False
+        mock_nc.jetstream.return_value = MagicMock()
+        mock_jsm = AsyncMock()
+        mock_jsm.find_stream = AsyncMock(return_value=MagicMock())
+        mock_nc.jsm.return_value = mock_jsm
+
+        with patch("hermes.publisher.nats.connect", AsyncMock(return_value=mock_nc)):
+            pub = Publisher()
+            await pub.connect("nats://localhost:4222")
+            assert pub.is_connected
+
+    async def test_disconnect_sets_not_connected(self) -> None:
+        mock_nc = MagicMock()
+        mock_nc.is_closed = False
+        mock_nc.drain = AsyncMock()
+        mock_nc.jetstream.return_value = MagicMock()
+        mock_jsm = AsyncMock()
+        mock_jsm.find_stream = AsyncMock(return_value=MagicMock())
+        mock_nc.jsm.return_value = mock_jsm
+
+        with patch("hermes.publisher.nats.connect", AsyncMock(return_value=mock_nc)):
+            pub = Publisher()
+            await pub.connect("nats://localhost:4222")
+            await pub.disconnect()
+            assert not pub.is_connected
+
+    async def test_disconnect_when_never_connected_is_noop(self) -> None:
+        pub = Publisher()
+        await pub.disconnect()  # must not raise
+        assert not pub.is_connected
+
+    async def test_publish_agent_event(self) -> None:
+        mock_js = AsyncMock()
+        mock_js.publish = AsyncMock()
+
+        pub = Publisher()
+        pub._js = mock_js
+
+        payload = WebhookPayload(
+            event="agent.created",
+            data={"host": "h", "name": "n"},
+            timestamp="2026-04-22T00:00:00Z",
+        )
+        await pub.publish(payload)
+
+        mock_js.publish.assert_awaited_once()
+        subject, _ = mock_js.publish.await_args.args
+        assert subject == "hi.agents.h.n.created"
+        assert "hi.agents.h.n.created" in pub.active_subjects
+
+    async def test_publish_task_event(self) -> None:
+        mock_js = AsyncMock()
+        mock_js.publish = AsyncMock()
+
+        pub = Publisher()
+        pub._js = mock_js
+
+        payload = WebhookPayload(
+            event="task.completed",
+            data={"teamId": "t1", "task_id": "t-99"},
+            timestamp="2026-04-22T00:00:00Z",
+        )
+        await pub.publish(payload)
+
+        mock_js.publish.assert_awaited_once()
+        subject, _ = mock_js.publish.await_args.args
+        assert subject == "hi.tasks.t1.t-99.completed"
+
+    async def test_publish_unknown_event_is_dropped(self) -> None:
+        mock_js = AsyncMock()
+        pub = Publisher()
+        pub._js = mock_js
+
+        payload = WebhookPayload(
+            event="unknown.event",
+            data={},
+            timestamp="2026-04-22T00:00:00Z",
+        )
+        await pub.publish(payload)
+        mock_js.publish.assert_not_awaited()
+
+    async def test_publish_without_connect_raises(self) -> None:
+        pub = Publisher()
+        payload = WebhookPayload(
+            event="agent.created",
+            data={"host": "h", "name": "n"},
+            timestamp="2026-04-22T00:00:00Z",
+        )
+        with pytest.raises(RuntimeError, match="not connected"):
+            await pub.publish(payload)
+
+    def test_is_connected_false_when_nc_is_none(self) -> None:
+        pub = Publisher()
+        assert not pub.is_connected
+
+    def test_active_subjects_initially_empty(self) -> None:
+        pub = Publisher()
+        assert pub.active_subjects == []
+
+    async def test_ensure_streams_creates_missing_stream(self) -> None:
+        """_ensure_streams creates a stream when find_stream raises."""
+        from nats.js.errors import NotFoundError
+
+        mock_nc = MagicMock()
+        mock_nc.is_closed = False
+        mock_nc.jetstream.return_value = MagicMock()
+        mock_jsm = AsyncMock()
+        mock_jsm.find_stream = AsyncMock(side_effect=NotFoundError)
+        mock_jsm.add_stream = AsyncMock()
+        mock_nc.jsm.return_value = mock_jsm
+
+        with patch("hermes.publisher.nats.connect", AsyncMock(return_value=mock_nc)):
+            pub = Publisher()
+            await pub.connect("nats://localhost:4222")
+            assert mock_jsm.add_stream.await_count == 2  # agents + tasks
