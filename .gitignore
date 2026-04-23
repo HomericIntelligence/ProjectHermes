@@ -1,14 +1,21 @@
+# Environment / secrets — NEVER commit these
 .env
+.env.local
+.env.*.local
+*.key
+*.pem
+credentials.json
+secrets/
+
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
 build/
+
+# Tools / caches
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
-.pixi/
-
-__pycache__/
-*.pyc
 .pixi/

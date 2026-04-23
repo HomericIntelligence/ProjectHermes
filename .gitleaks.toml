@@ -1,0 +1,8 @@
+title = "ProjectHermes gitleaks config"
+
+[allowlist]
+  description = "Test fixtures use placeholder secrets — not real credentials"
+  paths = [
+    '''tests/.*''',
+    '''.env\.example''',
+  ]
