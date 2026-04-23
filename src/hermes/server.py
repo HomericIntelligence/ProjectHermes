@@ -11,6 +11,7 @@ from typing import Annotated, AsyncGenerator
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 
+from hermes import __version__
 from hermes.config import Settings, get_settings
 from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not connect to NATS at %s: %s", settings.nats_url, exc)
 
+    _log_startup_banner(publisher, settings)
     app.state.publisher = publisher
     yield
     await publisher.disconnect()
@@ -110,6 +112,40 @@ async def list_subjects() -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _mask_secret(value: str, show_chars: int = 4) -> str:
+    """Mask a secret value, showing only the first ``show_chars`` characters."""
+    if not value:
+        return "(not set)"
+    if len(value) <= show_chars:
+        return "****"
+    return value[:show_chars] + "****"
+
+
+def _log_startup_banner(publisher: Publisher, settings: Settings | None = None) -> None:
+    """Log version, active configuration, and NATS connectivity on startup."""
+    if settings is None:
+        settings = get_settings()
+    logger.info("hermes version=%s", __version__)
+    logger.info(
+        "config nats_url=%s port=%s",
+        settings.nats_url,
+        settings.hermes_port,
+    )
+    logger.info(
+        "secrets webhook_secret=%s",
+        _mask_secret(settings.webhook_secret),
+    )
+    logger.info(
+        "hmac_validation=%s",
+        "enabled" if settings.webhook_secret else "disabled",
+    )
+    logger.info(
+        "nats connected=%s streams=%s",
+        publisher.is_connected,
+        publisher.stream_names,
+    )
 
 
 def _verify_signature(body: bytes, provided: str, settings: Settings) -> None:

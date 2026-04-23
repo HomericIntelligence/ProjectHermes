@@ -27,6 +27,7 @@ class Publisher:
         self._nc: NATSClient | None = None
         self._js: JetStreamContext | None = None
         self._active_subjects: set[str] = set()
+        self._stream_names: list[str] = []
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -53,6 +54,7 @@ class Publisher:
             except NotFoundError:
                 await jsm.add_stream(StreamConfig(name=name, subjects=subjects))
                 logger.info("Created JetStream stream: %s (%s)", name, subjects)
+            self._stream_names.append(name)
 
     async def disconnect(self) -> None:
         """Drain and close the NATS connection."""
@@ -69,6 +71,10 @@ class Publisher:
     @property
     def active_subjects(self) -> list[str]:
         return sorted(self._active_subjects)
+
+    @property
+    def stream_names(self) -> list[str]:
+        return list(self._stream_names)
 
     # ------------------------------------------------------------------
     # Publishing
