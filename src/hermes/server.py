@@ -192,6 +192,6 @@ if __name__ == "__main__":
     _settings = get_settings()
     uvicorn.run(
         "hermes.server:app",
-        host="0.0.0.0",
+        host=_settings.hermes_host,
         port=_settings.hermes_port,
     )

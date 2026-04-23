@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     )
 
     nats_url: str = "nats://localhost:4222"
+    hermes_host: str = "127.0.0.1"
     hermes_port: int = 8080
     webhook_secret: str = ""
     nats_connect_timeout: float = 5.0
