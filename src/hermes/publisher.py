@@ -32,9 +32,9 @@ class Publisher:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    async def connect(self, url: str) -> None:
+    async def connect(self, url: str, connect_timeout: float = 5.0) -> None:
         """Connect to the NATS server, obtain JetStream context, and ensure streams exist."""
-        self._nc = await nats.connect(url)
+        self._nc = await nats.connect(url, connect_timeout=connect_timeout)
         self._js = self._nc.jetstream()
         await self._ensure_streams()
         logger.info("Connected to NATS at %s", url)
@@ -73,7 +73,7 @@ class Publisher:
     # Publishing
     # ------------------------------------------------------------------
 
-    async def publish(self, payload: WebhookPayload) -> None:
+    async def publish(self, payload: WebhookPayload, publish_timeout: float = 5.0) -> None:
         """Route a webhook payload to the appropriate NATS subject."""
         if self._js is None:
             raise RuntimeError("Publisher is not connected to NATS")
@@ -91,7 +91,7 @@ class Publisher:
             }
         ).encode()
 
-        await self._js.publish(subject, message)
+        await self._js.publish(subject, message, timeout=publish_timeout)
         self._active_subjects.add(subject)
         logger.info("Published to %s", subject)
 
