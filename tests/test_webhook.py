@@ -211,6 +211,67 @@ class TestSettings:
         assert s.hermes_host == "127.0.0.1"
 
 
+class TestPayloadSizeLimit:
+    def test_oversized_content_length_returns_413(self) -> None:
+        client = _build_client()
+        body_bytes = b"x" * 100
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/octet-stream",
+                "Content-Length": str(2_000_000),
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code == 413
+
+    def test_oversized_body_returns_413(self) -> None:
+        client = _build_client()
+        body_bytes = b"x" * (1_048_576 + 1)
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/octet-stream",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code == 413
+
+    def test_exact_limit_body_accepted(self) -> None:
+        """A body exactly at the limit must not be rejected with 413."""
+        client = _build_client()
+        body_bytes = b"x" * 1_048_576
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/octet-stream",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code != 413
+
+    def test_custom_limit_respected(self) -> None:
+        from hermes.middleware import PayloadSizeLimitMiddleware
+        from starlette.testclient import TestClient
+        from starlette.requests import Request
+        from starlette.responses import Response
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+
+        async def echo(request: Request) -> Response:
+            return Response("ok", status_code=200)
+
+        mini_app = Starlette(routes=[Route("/", echo, methods=["POST"])])
+        mini_app.add_middleware(PayloadSizeLimitMiddleware, max_bytes=10)
+        tc = TestClient(mini_app)
+
+        assert tc.post("/", content=b"x" * 10).status_code == 200
+        assert tc.post("/", content=b"x" * 11).status_code == 413
+
+
 class TestSubjectsEndpoint:
     def test_subjects_returns_list(self) -> None:
         client = _build_client()

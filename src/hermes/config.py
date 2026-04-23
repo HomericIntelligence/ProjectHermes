@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     nats_publish_timeout: float = 5.0
     agamemnon_timeout: float = 10.0
     shutdown_timeout: float = 10.0
+    max_payload_bytes: int = 1_048_576
     enable_dead_letter: bool = True
     log_json: bool = False
     active_subjects_max: int = 1000
