@@ -10,20 +10,20 @@ python = ">=3.10"
 just = ">=1.13"
 
 [pypi-dependencies]
-fastapi = "*"
-uvicorn = {version = "*", extras = ["standard"]}
-nats-py = "*"
-pydantic = ">=2.0"
-pydantic-settings = "*"
-httpx = "*"
+fastapi = ">=0.115,<1"
+uvicorn = {version = ">=0.30,<1", extras = ["standard"]}
+nats-py = ">=2.9,<3"
+pydantic = ">=2.0,<3"
+pydantic-settings = ">=2.0,<3"
+httpx = ">=0.27,<1"
 
 [feature.dev.pypi-dependencies]
-pytest = "*"
-pytest-asyncio = "*"
-pytest-cov = "*"
-httpx = "*"
-ruff = "*"
-mypy = "*"
+pytest = ">=9.0,<10"
+pytest-asyncio = ">=1.0,<2"
+pytest-cov = ">=5.0,<7"
+httpx = ">=0.27,<1"
+ruff = ">=0.11,<1"
+mypy = ">=1.10,<2"
 
 [environments]
 default = { features = ["dev"], solve-group = "default" }

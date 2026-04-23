@@ -48,6 +48,7 @@ Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webho
 3. **Subject granularity** — Fine-grained subjects let subscribers filter precisely.
 4. **Async throughout** — FastAPI + nats-py are both async; never block the event loop.
 5. **Config via environment** — All tunables come from env vars / `.env`; no hard-coded URLs.
+6. **Pin dependency versions** — use `">=X.Y,<NEXT_MAJOR"` ranges in `pixi.toml`; never use `"*"`. Lower bound at the minor version level of the minimum supported version, upper bound at the next major to prevent breaking changes.
 
 ## Common Commands
 
