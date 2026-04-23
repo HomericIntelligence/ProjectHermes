@@ -86,8 +86,15 @@ class Publisher:
     # Publishing
     # ------------------------------------------------------------------
 
-    async def publish(self, payload: WebhookPayload, publish_timeout: float = 5.0) -> None:
-        """Route a webhook payload to the appropriate NATS subject."""
+    async def publish(self, payload: WebhookPayload, publish_timeout: float = 5.0, *, request_id: str = "") -> None:
+        """Route a webhook payload to the appropriate NATS subject.
+
+        Args:
+            payload: The incoming webhook payload to publish.
+            publish_timeout: Timeout in seconds for the NATS publish call.
+            request_id: Correlation ID from the originating HTTP request; included
+                in the NATS message to enable end-to-end tracing.
+        """
         if self._js is None:
             raise RuntimeError("Publisher is not connected to NATS")
 
@@ -98,6 +105,7 @@ class Publisher:
                 "event": payload.event,
                 "data": payload.data,
                 "timestamp": payload.timestamp,
+                "request_id": request_id,
             }
         ).encode()
 
@@ -117,7 +125,7 @@ class Publisher:
 
         await self._js.publish(subject, message, timeout=publish_timeout)
         self._active_subjects.add(subject)
-        logger.info("Published to %s", subject)
+        logger.info("Published to %s (request_id=%s)", subject, request_id)
 
     # ------------------------------------------------------------------
     # Subject resolution

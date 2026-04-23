@@ -7,10 +7,12 @@ import hashlib
 import hmac
 import logging
 import sys
+import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated, AsyncGenerator
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from hermes import __version__
 from hermes.config import Settings, get_settings
@@ -28,6 +30,8 @@ logger = logging.getLogger(__name__)
 _NATS_CONNECT_TIMEOUT = 5
 _NATS_RETRY_ATTEMPTS = 3
 _NATS_RETRY_INTERVAL = 5
+
+_REQUEST_ID_HEADER = "X-Request-ID"
 
 # ---------------------------------------------------------------------------
 # Application lifespan
@@ -94,6 +98,31 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 # ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Assign a unique request ID to every incoming request.
+
+    Reads ``X-Request-ID`` from the incoming headers if present (pass-through),
+    otherwise generates a fresh UUID4. The ID is stored on ``request.state``
+    so route handlers can include it in NATS payloads and log messages, and is
+    echoed back to the caller via the ``X-Request-ID`` response header.
+    """
+
+    async def dispatch(self, request: Request, call_next: object) -> Response:
+        request_id = request.headers.get(_REQUEST_ID_HEADER) or str(uuid.uuid4())
+        request.state.request_id = request_id
+        response: Response = await call_next(request)  # type: ignore[operator]
+        response.headers[_REQUEST_ID_HEADER] = request_id
+        return response
+
+
+app.add_middleware(RequestIDMiddleware)
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -122,6 +151,7 @@ async def health() -> HealthResponse:
 async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcceptedResponse:
     """Receive an external webhook, validate its signature, and publish to NATS."""
     raw_body = await request.body()
+    request_id: str = request.state.request_id
 
     # HMAC validation (skipped when no secret is configured)
     if settings.webhook_secret:
@@ -138,13 +168,17 @@ async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcc
 
     publisher: Publisher = app.state.publisher
     if not publisher.is_connected:
-        logger.error("NATS not connected; cannot publish event %r", payload.event)
+        logger.error(
+            "NATS not connected; cannot publish event %r (request_id=%s)",
+            payload.event,
+            request_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="NATS publisher not connected",
         )
 
-    await publisher.publish(payload, publish_timeout=settings.nats_publish_timeout)
+    await publisher.publish(payload, publish_timeout=settings.nats_publish_timeout, request_id=request_id)
     return WebhookAcceptedResponse(status="accepted", event=payload.event)
 
 
