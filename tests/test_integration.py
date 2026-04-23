@@ -75,8 +75,8 @@ class TestPublisherIntegration:
         await pub.connect(nats_url)
         try:
             jsm = pub._nc.jsm()
-            agents_stream = await jsm.find_stream("hi.agents.>")
-            tasks_stream = await jsm.find_stream("hi.tasks.>")
+            agents_stream = await jsm.stream_info("homeric-agents")
+            tasks_stream = await jsm.stream_info("homeric-tasks")
             assert agents_stream is not None
             assert tasks_stream is not None
         finally:
@@ -87,7 +87,11 @@ class TestPublisherIntegration:
     ) -> None:
         """Publishing an agent event delivers a message on the expected NATS subject."""
         received: list[nats.aio.msg.Msg] = []
-        sub = await nats_client.subscribe("hi.agents.>", cb=lambda m: received.append(m))
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.agents.>", cb=_cb)
 
         payload = WebhookPayload(
             event="agent.created",
@@ -108,7 +112,11 @@ class TestPublisherIntegration:
     ) -> None:
         """Publishing a task event delivers a message on the expected NATS subject."""
         received: list[nats.aio.msg.Msg] = []
-        sub = await nats_client.subscribe("hi.tasks.>", cb=lambda m: received.append(m))
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.tasks.>", cb=_cb)
 
         payload = WebhookPayload(
             event="task.updated",
@@ -172,7 +180,11 @@ class TestWebhookIntegration:
         settings.nats_url = nats_url
 
         received: list[nats.aio.msg.Msg] = []
-        sub = await nats_client.subscribe("hi.agents.>", cb=lambda m: received.append(m))
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.agents.>", cb=_cb)
 
         # Ensure the app has a live publisher
         pub = Publisher()
@@ -283,9 +295,11 @@ class TestEdgeCases:
     ) -> None:
         """Unknown event types are silently dropped — no NATS message, no error."""
         received: list[nats.aio.msg.Msg] = []
-        sub = await nats_client.subscribe(
-            "hi.>", cb=lambda m: received.append(m)
-        )
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.>", cb=_cb)
 
         payload = WebhookPayload(
             event="unknown.event",
@@ -303,7 +317,11 @@ class TestEdgeCases:
     ) -> None:
         """Ten concurrent publish calls all deliver distinct messages to NATS."""
         received: list[nats.aio.msg.Msg] = []
-        sub = await nats_client.subscribe("hi.agents.>", cb=lambda m: received.append(m))
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.agents.>", cb=_cb)
 
         payloads = [
             WebhookPayload(
@@ -324,9 +342,13 @@ class TestEdgeCases:
     ) -> None:
         """A payload with a large data dict (~100 KB) is published and received intact."""
         received: list[nats.aio.msg.Msg] = []
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
         sub = await nats_client.subscribe(
             "hi.agents.large.large-agent.created",
-            cb=lambda m: received.append(m),
+            cb=_cb,
         )
 
         large_data: dict[str, object] = {
