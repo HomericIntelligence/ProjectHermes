@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ssl
 from functools import lru_cache
 from typing import Optional
 
@@ -46,6 +47,53 @@ class Settings(BaseSettings):
                 f"WEBHOOK_SECRET must be at least {_MIN_SECRET_LENGTH} characters when set"
             )
         return v
+
+    # TLS configuration (all optional; no TLS by default)
+    tls_ca_bundle: str | None = None
+    tls_cert_file: str | None = None
+    tls_key_file: str | None = None
+    tls_verify: bool = True
+
+    def build_ssl_context(self) -> ssl.SSLContext | None:
+        """Return an SSLContext for NATS TLS connections, or None if TLS is not configured.
+
+        An SSLContext is returned when any of the following is true:
+        - ``tls_ca_bundle`` is set (custom CA bundle)
+        - Both ``tls_cert_file`` and ``tls_key_file`` are set (mTLS client cert)
+        - ``nats_url`` uses the ``tls://`` scheme
+
+        Returns ``None`` when plaintext NATS is in use and no cert fields are set.
+        """
+        needs_tls = (
+            self.tls_ca_bundle is not None
+            or (self.tls_cert_file is not None and self.tls_key_file is not None)
+            or self.nats_url.startswith("tls://")
+        )
+        if not needs_tls:
+            return None
+
+        ctx = ssl.create_default_context()
+
+        if not self.tls_verify:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+        if self.tls_ca_bundle is not None:
+            ctx.load_verify_locations(cafile=self.tls_ca_bundle)
+
+        if self.tls_cert_file is not None and self.tls_key_file is not None:
+            ctx.load_cert_chain(certfile=self.tls_cert_file, keyfile=self.tls_key_file)
+
+        return ctx
+
+    def httpx_verify(self) -> bool | str:
+        """Return the value to pass as ``verify=`` to ``httpx.AsyncClient``.
+
+        Returns the CA bundle path when set, otherwise the ``tls_verify`` bool.
+        """
+        if self.tls_ca_bundle is not None:
+            return self.tls_ca_bundle
+        return self.tls_verify
 
 
 @lru_cache
