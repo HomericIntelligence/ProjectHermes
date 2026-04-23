@@ -203,6 +203,14 @@ class TestWebhookEndpoint:
         assert response.status_code == 401
 
 
+class TestSettings:
+    def test_hermes_host_defaults_to_localhost(self) -> None:
+        from hermes.config import Settings
+
+        s = Settings()
+        assert s.hermes_host == "127.0.0.1"
+
+
 class TestSubjectsEndpoint:
     def test_subjects_returns_list(self) -> None:
         client = _build_client()
