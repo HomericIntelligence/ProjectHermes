@@ -8,8 +8,9 @@ import hmac
 import logging
 import signal
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, AsyncGenerator
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse

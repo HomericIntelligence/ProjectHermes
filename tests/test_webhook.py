@@ -24,9 +24,9 @@ def _sign(body: bytes) -> str:
 
 def _build_client() -> TestClient:
     """Build a TestClient with a mocked Publisher and a known webhook secret."""
-    from hermes.server import app
-    from hermes.publisher import Publisher
     from hermes.config import settings
+    from hermes.publisher import Publisher
+    from hermes.server import app
 
     mock_publisher = MagicMock(spec=Publisher)
     mock_publisher.is_connected = True
@@ -55,6 +55,8 @@ def _build_client_disconnected() -> TestClient:
 
 
 class TestHealthEndpoint:
+    """Tests for the GET /health liveness endpoint."""
+
     def test_health_returns_200_when_connected(self) -> None:
         client = _build_client()
         response = client.get("/health")

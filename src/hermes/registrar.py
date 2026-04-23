@@ -1,5 +1,4 @@
-"""
-registrar.py — REMOVED (ADR-006)
+"""Registrar module removed per ADR-006.
 
 Previously registered ProjectHermes as a webhook receiver with ai-maestro.
 After migration to ProjectAgamemnon, Hermes no longer registers with an
