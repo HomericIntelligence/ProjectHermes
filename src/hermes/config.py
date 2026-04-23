@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     enable_dead_letter: bool = True
     log_json: bool = False
     active_subjects_max: int = 1000
+    webhook_rate_limit: str = "60/minute"
+    webhook_rate_limit_key: str = "ip"
 
     @model_validator(mode="after")
     def _set_public_url_default(self) -> "Settings":

@@ -29,6 +29,7 @@ from hermes.models import (
     WebhookPayload,
 )
 from hermes.publisher import AGENT_EVENTS, TASK_EVENTS, Publisher
+from hermes.rate_limit import limiter, rate_limit_exceeded_handler
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,8 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(429, rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 # ---------------------------------------------------------------------------
 # Dependencies
@@ -236,9 +239,11 @@ async def ready(response: Response) -> dict[str, object]:
     responses={
         401: {"model": ErrorResponse, "description": "Invalid webhook signature"},
         422: {"model": ErrorResponse, "description": "Malformed or invalid payload"},
+        429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
         503: {"model": ErrorResponse, "description": "NATS publisher not connected"},
     },
 )
+@limiter.limit(lambda: get_settings().webhook_rate_limit)
 async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcceptedResponse:
     """Receive an external webhook, validate its signature, and publish to NATS."""
     raw_body = await request.body()
@@ -273,7 +278,16 @@ async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcc
             detail="NATS publisher not connected",
         )
 
-    await publisher.publish(payload, publish_timeout=settings.nats_publish_timeout, request_id=request_id)
+    try:
+        await asyncio.wait_for(
+            publisher.publish(payload, publish_timeout=settings.nats_publish_timeout, request_id=request_id),
+            timeout=settings.nats_publish_timeout,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="NATS publish timed out",
+        )
     return WebhookAcceptedResponse(status="accepted", event=payload.event)
 
 
