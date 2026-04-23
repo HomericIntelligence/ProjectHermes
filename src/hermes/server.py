@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -17,6 +18,10 @@ from hermes.publisher import Publisher
 
 logger = logging.getLogger(__name__)
 
+_NATS_CONNECT_TIMEOUT = 5
+_NATS_RETRY_ATTEMPTS = 3
+_NATS_RETRY_INTERVAL = 5
+
 # ---------------------------------------------------------------------------
 # Application lifespan
 # ---------------------------------------------------------------------------
@@ -24,13 +29,38 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Connect to NATS on startup; disconnect cleanly on shutdown."""
+    """Connect to NATS on startup with retries; abort startup if all attempts fail."""
     settings = get_settings()
     publisher = Publisher()
-    try:
-        await publisher.connect(settings.nats_url, connect_timeout=settings.nats_connect_timeout)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not connect to NATS at %s: %s", settings.nats_url, exc)
+    last_exc: Exception | None = None
+    for attempt in range(1, _NATS_RETRY_ATTEMPTS + 1):
+        try:
+            await asyncio.wait_for(
+                publisher.connect(settings.nats_url, connect_timeout=settings.nats_connect_timeout),
+                timeout=_NATS_CONNECT_TIMEOUT,
+            )
+            last_exc = None
+            break
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            logger.error(
+                "NATS connect attempt %d/%d failed (%s: %s); retrying in %ds",
+                attempt,
+                _NATS_RETRY_ATTEMPTS,
+                type(exc).__name__,
+                exc,
+                _NATS_RETRY_INTERVAL,
+            )
+            if attempt < _NATS_RETRY_ATTEMPTS:
+                await asyncio.sleep(_NATS_RETRY_INTERVAL)
+
+    if last_exc is not None:
+        logger.critical(
+            "Could not connect to NATS at %s after %d attempts; aborting startup",
+            settings.nats_url,
+            _NATS_RETRY_ATTEMPTS,
+        )
+        raise last_exc
 
     app.state.publisher = publisher
     yield

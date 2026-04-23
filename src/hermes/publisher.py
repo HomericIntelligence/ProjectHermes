@@ -34,7 +34,7 @@ class Publisher:
 
     async def connect(self, url: str, connect_timeout: float = 5.0) -> None:
         """Connect to the NATS server, obtain JetStream context, and ensure streams exist."""
-        self._nc = await nats.connect(url, connect_timeout=connect_timeout)
+        self._nc = await nats.connect(url, allow_reconnect=False, connect_timeout=connect_timeout)
         self._js = self._nc.jetstream()
         await self._ensure_streams()
         logger.info("Connected to NATS at %s", url)
