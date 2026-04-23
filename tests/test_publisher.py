@@ -15,8 +15,16 @@ from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
 
 
-def _make_publisher() -> Publisher:
-    return Publisher()
+def _make_publisher(enable_dead_letter: bool = True) -> Publisher:
+    return Publisher(enable_dead_letter=enable_dead_letter)
+
+
+def _make_payload(event: str, data: dict | None = None) -> WebhookPayload:
+    return WebhookPayload(
+        event=event,
+        data=data or {},
+        timestamp="2026-04-22T00:00:00Z",
+    )
 
 
 class TestAgentSubjectMapping:
@@ -220,3 +228,61 @@ class TestPublisherLifecycle:
             pub = Publisher()
             await pub.connect("nats://localhost:4222")
             assert mock_jsm.add_stream.await_count == 2  # agents + tasks
+
+
+class TestDeadLetterRouting:
+    """Dead-letter handling for unroutable webhook events."""
+
+    def test_resolve_subject_returns_none_for_unknown_event(self) -> None:
+        pub = _make_publisher()
+        payload = _make_payload("team.created")
+        assert pub._resolve_subject(payload) is None
+
+    @pytest.mark.asyncio
+    async def test_publish_dead_letters_unroutable_event(self) -> None:
+        pub = _make_publisher(enable_dead_letter=True)
+        pub._js = AsyncMock()
+        await pub.publish(_make_payload("team.created"))
+        pub._js.publish.assert_awaited_once()
+        subject = pub._js.publish.call_args[0][0]
+        assert subject == "hi.deadletter.team-created"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "event_type,expected_subject",
+        [
+            ("team.created",   "hi.deadletter.team-created"),
+            ("sprint.started", "hi.deadletter.sprint-started"),
+            ("unknown",        "hi.deadletter.unknown"),
+            ("foo.bar.baz",    "hi.deadletter.foo-bar-baz"),
+        ],
+    )
+    async def test_dead_letter_subject_format(
+        self, event_type: str, expected_subject: str
+    ) -> None:
+        pub = _make_publisher(enable_dead_letter=True)
+        pub._js = AsyncMock()
+        await pub.publish(_make_payload(event_type))
+        subject = pub._js.publish.call_args[0][0]
+        assert subject == expected_subject
+
+    @pytest.mark.asyncio
+    async def test_dead_letter_disabled_drops_event(self) -> None:
+        pub = _make_publisher(enable_dead_letter=False)
+        pub._js = AsyncMock()
+        await pub.publish(_make_payload("team.created"))
+        pub._js.publish.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_dead_letter_tracks_active_subject(self) -> None:
+        pub = _make_publisher(enable_dead_letter=True)
+        pub._js = AsyncMock()
+        await pub.publish(_make_payload("team.created"))
+        assert "hi.deadletter.team-created" in pub.active_subjects
+
+    @pytest.mark.asyncio
+    async def test_dead_letter_disabled_does_not_track_subject(self) -> None:
+        pub = _make_publisher(enable_dead_letter=False)
+        pub._js = AsyncMock()
+        await pub.publish(_make_payload("team.created"))
+        assert not any(s.startswith("hi.deadletter.") for s in pub.active_subjects)
