@@ -12,7 +12,7 @@ default:
 
 # Start the Hermes server (production mode)
 start:
-    pixi run python -m hermes.server
+    pixi run python -m hermes
 
 # Start with hot-reload for development
 dev:
