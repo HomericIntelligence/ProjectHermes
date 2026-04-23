@@ -32,6 +32,7 @@ class Publisher:
         self._active_subjects: set[str] = set()
         self._stream_names: list[str] = []
         self._enable_dead_letter = enable_dead_letter
+        self._connected: bool = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -39,7 +40,22 @@ class Publisher:
 
     async def connect(self, url: str, connect_timeout: float = 5.0) -> None:
         """Connect to the NATS server, obtain JetStream context, and ensure streams exist."""
-        self._nc = await nats.connect(url, allow_reconnect=False, connect_timeout=connect_timeout)
+        async def _on_disconnected() -> None:
+            self._connected = False
+            logger.warning("NATS disconnected")
+
+        async def _on_reconnected() -> None:
+            self._connected = True
+            logger.info("NATS reconnected")
+
+        self._nc = await nats.connect(
+            url,
+            allow_reconnect=False,
+            connect_timeout=connect_timeout,
+            disconnected_cb=_on_disconnected,
+            reconnected_cb=_on_reconnected,
+        )
+        self._connected = True
         self._js = self._nc.jetstream()
         await self._ensure_streams()
         logger.info("Connected to NATS at %s", url)
@@ -68,11 +84,12 @@ class Publisher:
             await self._nc.drain()
             self._nc = None
             self._js = None
+            self._connected = False
             logger.info("Disconnected from NATS")
 
     @property
     def is_connected(self) -> bool:
-        return self._nc is not None and not self._nc.is_closed
+        return self._connected and self._nc is not None
 
     @property
     def active_subjects(self) -> list[str]:

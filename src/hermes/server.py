@@ -198,15 +198,28 @@ app.add_middleware(RequestIDMiddleware)
     response_model=HealthResponse,
     responses={503: {"model": ErrorResponse, "description": "NATS not reachable"}},
 )
-async def health() -> HealthResponse:
-    """Return service health and NATS connection status."""
+async def health(response: Response) -> HealthResponse:
+    """Return service health and NATS connection status. Returns 503 when NATS is disconnected."""
     publisher: Publisher = app.state.publisher
+    connected = publisher.is_connected
+    if not connected:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return HealthResponse(
-        status="ok",
-        nats_connected=publisher.is_connected,
+        status="ok" if connected else "degraded",
+        nats_connected=connected,
         shutting_down=_shutdown_event.is_set(),
         hmac_validation_enabled=bool(get_settings().webhook_secret),
     )
+
+
+@app.get("/ready", responses={503: {"model": ErrorResponse, "description": "NATS not connected"}})
+async def ready(response: Response) -> dict[str, object]:
+    """Readiness probe — returns 503 when NATS is not connected."""
+    publisher: Publisher = app.state.publisher
+    if not publisher.is_connected:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"ready": False, "reason": "NATS not connected"}
+    return {"ready": True}
 
 
 @app.post(

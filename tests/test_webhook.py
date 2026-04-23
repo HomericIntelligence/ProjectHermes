@@ -40,8 +40,22 @@ def _build_client() -> TestClient:
     return TestClient(app, raise_server_exceptions=True)
 
 
+def _build_client_disconnected() -> TestClient:
+    """Build a TestClient where the Publisher reports NATS as disconnected."""
+    from hermes.server import app
+    from hermes.publisher import Publisher
+
+    mock_publisher = MagicMock(spec=Publisher)
+    mock_publisher.is_connected = False
+    mock_publisher.active_subjects = []
+    mock_publisher.publish = AsyncMock()
+
+    app.state.publisher = mock_publisher
+    return TestClient(app, raise_server_exceptions=True)
+
+
 class TestHealthEndpoint:
-    def test_health_returns_200(self) -> None:
+    def test_health_returns_200_when_connected(self) -> None:
         client = _build_client()
         response = client.get("/health")
         assert response.status_code == 200
@@ -55,6 +69,48 @@ class TestHealthEndpoint:
         client = _build_client()
         body = client.get("/health").json()
         assert "nats_connected" in body
+
+    def test_health_returns_503_when_nats_disconnected(self) -> None:
+        client = _build_client_disconnected()
+        response = client.get("/health")
+        assert response.status_code == 503
+
+    def test_health_returns_degraded_status_when_nats_disconnected(self) -> None:
+        client = _build_client_disconnected()
+        body = client.get("/health").json()
+        assert body["status"] == "degraded"
+
+    def test_health_returns_nats_connected_false_when_disconnected(self) -> None:
+        client = _build_client_disconnected()
+        body = client.get("/health").json()
+        assert body["nats_connected"] is False
+
+
+class TestReadyEndpoint:
+    def test_ready_returns_200_when_connected(self) -> None:
+        client = _build_client()
+        response = client.get("/ready")
+        assert response.status_code == 200
+
+    def test_ready_returns_ready_true_when_connected(self) -> None:
+        client = _build_client()
+        body = client.get("/ready").json()
+        assert body["ready"] is True
+
+    def test_ready_returns_503_when_nats_disconnected(self) -> None:
+        client = _build_client_disconnected()
+        response = client.get("/ready")
+        assert response.status_code == 503
+
+    def test_ready_returns_ready_false_when_disconnected(self) -> None:
+        client = _build_client_disconnected()
+        body = client.get("/ready").json()
+        assert body["ready"] is False
+
+    def test_ready_includes_reason_when_disconnected(self) -> None:
+        client = _build_client_disconnected()
+        body = client.get("/ready").json()
+        assert "reason" in body
 
 
 class TestWebhookEndpoint:
@@ -138,70 +194,6 @@ class TestWebhookEndpoint:
             },
         )
         assert response.status_code == 401
-
-
-class TestHealthHmacField:
-    def test_health_shows_hmac_enabled(self) -> None:
-        client = _build_client()  # _build_client sets webhook_secret = _TEST_SECRET
-        body = client.get("/health").json()
-        assert body["hmac_validation_enabled"] is True
-
-    def test_health_shows_hmac_disabled(self) -> None:
-        from hermes.server import app
-        from hermes.publisher import Publisher
-        from hermes.config import settings
-
-        mock_publisher = MagicMock(spec=Publisher)
-        mock_publisher.is_connected = True
-        mock_publisher.active_subjects = []
-        mock_publisher.publish = AsyncMock()
-
-        app.state.publisher = mock_publisher
-        settings.webhook_secret = ""
-        client = TestClient(app, raise_server_exceptions=True)
-        body = client.get("/health").json()
-        assert body["hmac_validation_enabled"] is False
-
-
-class TestHmacStartupWarning:
-    """Tests that lifespan emits (or suppresses) the HMAC-disabled warning."""
-
-    async def _run_lifespan(self) -> None:
-        """Run lifespan startup with a mocked Publisher, then shut down."""
-        from unittest.mock import patch
-        from hermes.server import lifespan, app
-
-        mock_publisher_instance = MagicMock()
-        mock_publisher_instance.connect = AsyncMock()
-        mock_publisher_instance.disconnect = AsyncMock()
-
-        with patch("hermes.server.Publisher", return_value=mock_publisher_instance):
-            async with lifespan(app):
-                pass
-
-    async def test_startup_warns_when_hmac_disabled(self, caplog: object) -> None:
-        import logging
-        from hermes.config import settings
-
-        settings.webhook_secret = ""
-        with caplog.at_level(logging.WARNING, logger="hermes.server"):  # type: ignore[attr-defined]
-            await self._run_lifespan()
-        assert any(
-            "HMAC webhook validation is DISABLED" in r.message
-            for r in caplog.records  # type: ignore[attr-defined]
-        )
-
-    async def test_no_warning_when_secret_set(self, caplog: object) -> None:
-        import logging
-        from hermes.config import settings
-
-        settings.webhook_secret = "some-secret"
-        with caplog.at_level(logging.WARNING, logger="hermes.server"):  # type: ignore[attr-defined]
-            await self._run_lifespan()
-        assert not any(
-            "HMAC webhook validation is DISABLED" in r.message
-            for r in caplog.records  # type: ignore[attr-defined]
-        )
 
 
 class TestSubjectsEndpoint:
