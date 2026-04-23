@@ -28,3 +28,7 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return the cached Settings instance."""
     return Settings()
+
+
+# Module-level singleton — allows tests to mutate settings in-place.
+settings: Settings = get_settings()

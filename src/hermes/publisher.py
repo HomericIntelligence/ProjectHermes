@@ -42,14 +42,15 @@ class Publisher:
     async def _ensure_streams(self) -> None:
         """Create JetStream streams if they don't exist yet."""
         from nats.js.api import StreamConfig
+        from nats.js.errors import NotFoundError
         jsm = self._nc.jsm()
         for name, subjects in (
             ("homeric-agents", ["hi.agents.>"]),
             ("homeric-tasks",  ["hi.tasks.>"]),
         ):
             try:
-                await jsm.find_stream(subjects[0])
-            except Exception:
+                await jsm.stream_info(name)
+            except NotFoundError:
                 await jsm.add_stream(StreamConfig(name=name, subjects=subjects))
                 logger.info("Created JetStream stream: %s (%s)", name, subjects)
 

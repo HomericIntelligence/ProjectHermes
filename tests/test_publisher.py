@@ -212,7 +212,7 @@ class TestPublisherLifecycle:
         mock_nc.is_closed = False
         mock_nc.jetstream.return_value = MagicMock()
         mock_jsm = AsyncMock()
-        mock_jsm.find_stream = AsyncMock(side_effect=NotFoundError)
+        mock_jsm.stream_info = AsyncMock(side_effect=NotFoundError)
         mock_jsm.add_stream = AsyncMock()
         mock_nc.jsm.return_value = mock_jsm
 
