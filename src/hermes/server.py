@@ -21,6 +21,7 @@ from hermes import __version__
 from hermes.config import Settings, get_settings
 from hermes.logging_config import setup_logging
 from hermes.metrics import WEBHOOKS_FAILED, WEBHOOKS_RECEIVED
+from hermes.middleware import PayloadSizeLimitMiddleware
 from hermes.models import (
     ErrorResponse,
     HealthResponse,
@@ -191,6 +192,7 @@ class ShutdownMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(ShutdownMiddleware)
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(PayloadSizeLimitMiddleware, max_bytes=get_settings().max_payload_bytes)
 
 
 # ---------------------------------------------------------------------------
