@@ -28,6 +28,19 @@ health:
 register-webhook:
     bash scripts/register-webhooks.sh
 
+# === Setup ===
+
+# One-command developer setup: copy .env, install deps
+bootstrap:
+    cp -n .env.example .env || true
+    pixi install
+    @echo "Ready! Run 'just dev' to start."
+
+# Install pre-commit hooks into the local git repo
+setup-hooks:
+    pixi run pre-commit install
+    @echo "Pre-commit hooks installed."
+
 # === Testing ===
 
 # Run the full test suite (unit + integration)
