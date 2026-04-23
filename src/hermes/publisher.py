@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from collections import deque
 from typing import Any
 
 import nats
 from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
 
+from hermes.metrics import (
+    ACTIVE_SUBJECTS,
+    DEAD_LETTERS,
+    PUBLISH_LATENCY,
+    WEBHOOKS_PUBLISHED,
+)
 from hermes.models import WebhookPayload
 
 logger = logging.getLogger(__name__)
@@ -21,6 +29,7 @@ _TASK_EVENTS = {"task.updated", "task.completed", "task.failed"}
 
 
 _DEAD_LETTER_SUBJECT_PREFIX = "hi.deadletter"
+_MAX_SUBJECTS = 10_000
 
 
 class Publisher:
@@ -31,6 +40,7 @@ class Publisher:
         self._js: JetStreamContext | None = None
         self._active_subjects: set[str] = set()
         self._stream_names: list[str] = []
+        self._dead_letters: deque[dict[str, Any]] = deque(maxlen=1000)
         self._enable_dead_letter = enable_dead_letter
         self._connected: bool = False
 
@@ -99,6 +109,10 @@ class Publisher:
     def stream_names(self) -> list[str]:
         return list(self._stream_names)
 
+    @property
+    def dead_letters(self) -> list[dict[str, Any]]:
+        return list(self._dead_letters)
+
     # ------------------------------------------------------------------
     # Publishing
     # ------------------------------------------------------------------
@@ -130,7 +144,13 @@ class Publisher:
             if self._enable_dead_letter:
                 dead_subject = f"{_DEAD_LETTER_SUBJECT_PREFIX}.{_slug(payload.event)}"
                 await self._js.publish(dead_subject, message, timeout=publish_timeout)
-                self._active_subjects.add(dead_subject)
+                self._dead_letters.append({"event": payload.event, "subject": dead_subject})
+                DEAD_LETTERS.labels(event_type=payload.event).inc()
+                if len(self._active_subjects) < _MAX_SUBJECTS:
+                    self._active_subjects.add(dead_subject)
+                    ACTIVE_SUBJECTS.set(len(self._active_subjects))
+                else:
+                    logger.warning("active_subjects cap reached (%d); not tracking %s", _MAX_SUBJECTS, dead_subject)
                 logger.warning(
                     "No subject mapping for event type %r; dead-lettered to %s",
                     payload.event,
@@ -140,8 +160,15 @@ class Publisher:
                 logger.warning("No subject mapping for event type %r; dropping", payload.event)
             return
 
+        t0 = time.perf_counter()
         await self._js.publish(subject, message, timeout=publish_timeout)
-        self._active_subjects.add(subject)
+        PUBLISH_LATENCY.observe(time.perf_counter() - t0)
+        WEBHOOKS_PUBLISHED.labels(subject_prefix=subject.split(".")[1]).inc()
+        if len(self._active_subjects) < _MAX_SUBJECTS:
+            self._active_subjects.add(subject)
+            ACTIVE_SUBJECTS.set(len(self._active_subjects))
+        else:
+            logger.warning("active_subjects cap reached (%d); not tracking %s", _MAX_SUBJECTS, subject)
         logger.info("Published to %s (request_id=%s)", subject, request_id)
 
     # ------------------------------------------------------------------

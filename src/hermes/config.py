@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     agamemnon_timeout: float = 10.0
     shutdown_timeout: float = 10.0
     enable_dead_letter: bool = True
+    log_json: bool = False
 
     @model_validator(mode="after")
     def _set_public_url_default(self) -> "Settings":

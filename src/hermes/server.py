@@ -7,17 +7,19 @@ import hashlib
 import hmac
 import logging
 import signal
-import sys
 import uuid
 from contextlib import asynccontextmanager
-from typing import Annotated, AsyncGenerator
+from typing import Annotated, Any, AsyncGenerator
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from hermes import __version__
 from hermes.config import Settings, get_settings
+from hermes.logging_config import setup_logging
+from hermes.metrics import WEBHOOKS_FAILED, WEBHOOKS_RECEIVED
 from hermes.models import (
     ErrorResponse,
     HealthResponse,
@@ -98,6 +100,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     _shutdown_event = asyncio.Event()
     _inflight = 0
+
+    setup_logging(json_format=settings.log_json)
 
     if not settings.webhook_secret:
         logger.warning(
@@ -247,10 +251,13 @@ async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcc
         payload = WebhookPayload.model_validate_json(raw_body)
     except Exception as exc:
         logger.warning("Invalid webhook payload: %s", exc)
+        WEBHOOKS_FAILED.labels(reason="invalid_payload").inc()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid payload format",
         ) from exc
+
+    WEBHOOKS_RECEIVED.labels(event_type=payload.event).inc()
 
     publisher: Publisher = app.state.publisher
     if not publisher.is_connected:
@@ -259,6 +266,7 @@ async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcc
             payload.event,
             request_id,
         )
+        WEBHOOKS_FAILED.labels(reason="nats_not_connected").inc()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="NATS publisher not connected",
@@ -276,6 +284,19 @@ async def list_subjects() -> SubjectsResponse:
     """Return the list of NATS subjects that have been published to."""
     publisher: Publisher = app.state.publisher
     return SubjectsResponse(subjects=publisher.active_subjects)
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    """Expose Prometheus metrics in text format."""
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/dead-letters")
+async def dead_letters() -> dict[str, list[dict[str, Any]]]:
+    """Return the in-memory dead-letter queue of unroutable webhook events."""
+    publisher: Publisher = app.state.publisher
+    return {"dead_letters": publisher.dead_letters}
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +360,7 @@ def _verify_signature(body: bytes, provided: str, settings: Settings) -> None:
 if __name__ == "__main__":
     import uvicorn
 
-    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    setup_logging(json_format=get_settings().log_json)
     _settings = get_settings()
     uvicorn.run(
         "hermes.server:app",
