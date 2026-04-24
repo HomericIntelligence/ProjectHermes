@@ -33,7 +33,7 @@ from hermes.models import (
     WebhookAcceptedResponse,
     WebhookPayload,
 )
-from hermes.publisher import AGENT_EVENTS, TASK_EVENTS, Publisher
+from hermes.publisher import AGENT_EVENTS, TASK_EVENTS, Publisher, UnknownEventTypeError
 from hermes.rate_limit import limiter, rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -337,6 +337,12 @@ async def receive_webhook(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="NATS publish timed out",
         )
+    except UnknownEventTypeError as exc:
+        WEBHOOKS_FAILED.labels(reason="unknown_event_type").inc()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unknown event type: {exc}",
+        ) from exc
     return WebhookAcceptedResponse(status="accepted", event=payload.event)
 
 

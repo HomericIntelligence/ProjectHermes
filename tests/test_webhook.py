@@ -689,3 +689,89 @@ class TestTimestampValidation:
             },
         )
         assert response.status_code in (202, 500)
+
+
+class TestUnknownEventType:
+    """Tests for #125: unknown event types return 422 when dead-lettering is disabled."""
+
+    def _build_client_with_unknown_event(self, event: str) -> TestClient:
+        from hermes.publisher import UnknownEventTypeError, Publisher
+        from hermes.server import app
+        from hermes.config import settings
+
+        mock_publisher = MagicMock(spec=Publisher)
+        mock_publisher.is_connected = True
+        mock_publisher.active_subjects = []
+        mock_publisher.publish = AsyncMock(side_effect=UnknownEventTypeError(event))
+
+        app.state.publisher = mock_publisher
+        settings.webhook_secret = ""
+        return TestClient(app, raise_server_exceptions=True)
+
+    def test_unknown_event_type_raises_422(self) -> None:
+        client = self._build_client_with_unknown_event("foo.bar")
+        payload = {"event": "foo.bar", "data": {}, "timestamp": "2026-01-01T00:00:00Z"}
+        body_bytes = json.dumps(payload).encode()
+        response = client.post("/webhook", content=body_bytes, headers={"Content-Type": "application/json"})
+        assert response.status_code == 422
+
+    def test_unknown_event_type_422_detail_contains_event(self) -> None:
+        client = self._build_client_with_unknown_event("foo.bar")
+        payload = {"event": "foo.bar", "data": {}, "timestamp": "2026-01-01T00:00:00Z"}
+        body_bytes = json.dumps(payload).encode()
+        response = client.post("/webhook", content=body_bytes, headers={"Content-Type": "application/json"})
+        body = response.json()
+        assert "foo.bar" in body["detail"]
+
+
+class TestMissingFieldWarnings:
+    """Tests for #98: warnings logged when agent/task data fields are missing."""
+
+    def test_missing_host_field_logs_warning(self) -> None:
+        from unittest.mock import patch
+        from hermes.publisher import Publisher
+
+        with patch("hermes.publisher.logger") as mock_log:
+            pub = Publisher()
+            pub._parse_agent_subject({"name": "bot"}, "agent.created")
+            warned_messages = [str(call.args) for call in mock_log.warning.call_args_list]
+            assert any("host" in msg for msg in warned_messages)
+
+    def test_missing_name_field_logs_warning(self) -> None:
+        from unittest.mock import patch
+        from hermes.publisher import Publisher
+
+        with patch("hermes.publisher.logger") as mock_log:
+            pub = Publisher()
+            pub._parse_agent_subject({"host": "myhost"}, "agent.created")
+            warned_messages = [str(call.args) for call in mock_log.warning.call_args_list]
+            assert any("name" in msg for msg in warned_messages)
+
+    def test_missing_team_id_field_logs_warning(self) -> None:
+        from unittest.mock import patch
+        from hermes.publisher import Publisher
+
+        with patch("hermes.publisher.logger") as mock_log:
+            pub = Publisher()
+            pub._parse_task_subject({"task_id": "t-1"}, "task.updated")
+            warned_messages = [str(call.args) for call in mock_log.warning.call_args_list]
+            assert any("team_id" in msg for msg in warned_messages)
+
+    def test_missing_task_id_field_logs_warning(self) -> None:
+        from unittest.mock import patch
+        from hermes.publisher import Publisher
+
+        with patch("hermes.publisher.logger") as mock_log:
+            pub = Publisher()
+            pub._parse_task_subject({"team_id": "alpha"}, "task.updated")
+            warned_messages = [str(call.args) for call in mock_log.warning.call_args_list]
+            assert any("task_id" in msg for msg in warned_messages)
+
+    def test_present_host_and_name_no_warning(self) -> None:
+        from unittest.mock import patch
+        from hermes.publisher import Publisher
+
+        with patch("hermes.publisher.logger") as mock_log:
+            pub = Publisher()
+            pub._parse_agent_subject({"host": "myhost", "name": "bot"}, "agent.created")
+            assert not mock_log.warning.called

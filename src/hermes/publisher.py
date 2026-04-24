@@ -30,6 +30,10 @@ AGENT_EVENTS: frozenset[str] = frozenset({"agent.created", "agent.updated", "age
 TASK_EVENTS: frozenset[str] = frozenset({"task.updated", "task.completed", "task.failed"})
 
 
+class UnknownEventTypeError(ValueError):
+    """Raised by Publisher.publish() when an event type is unrecognised and dead-lettering is disabled."""
+
+
 _DEAD_LETTER_SUBJECT_PREFIX = "hi.deadletter"
 _SLUG_MAX_LEN = 64  # Maximum characters per NATS subject slug token
 
@@ -184,7 +188,7 @@ class Publisher:
                     dead_subject,
                 )
             else:
-                logger.warning("No subject mapping for event type %r; dropping", payload.event)
+                raise UnknownEventTypeError(payload.event)
             return
 
         _RETRYABLE = (nats.errors.TimeoutError, nats.errors.NoRespondersError)
@@ -244,16 +248,28 @@ class Publisher:
         Falls back to ``unknown`` tokens when fields are missing so messages
         are never silently dropped due to incomplete payloads.
         """
-        host = _slug(data.get("hostId") or data.get("host") or "") or "unknown"
-        name = _slug(data.get("name") or "") or "unknown"
+        raw_host = data.get("hostId") or data.get("host")
+        raw_name = data.get("name")
+        if not raw_host:
+            logger.warning("agent event missing 'host' field; using 'unknown'", extra={"event": event})
+        if not raw_name:
+            logger.warning("agent event missing 'name' field; using 'unknown'", extra={"event": event})
+        host = _slug(raw_host or "unknown") or "unknown"
+        name = _slug(raw_name or "unknown") or "unknown"
         # Strip the "agent." prefix to get the bare verb (created/updated/deleted)
         verb = event.split(".", 1)[-1] if "." in event else event
         return f"hi.agents.{host}.{name}.{verb}"
 
     def _parse_task_subject(self, data: dict[str, Any], event: str) -> str:
         """Build ``hi.tasks.{team_id}.{task_id}.{event}`` from task event data."""
-        team_id = _slug(data.get("teamId") or data.get("team_id") or "") or "unknown"
-        task_id = _slug(data.get("id") or data.get("task_id") or "") or "unknown"
+        raw_team_id = data.get("teamId") or data.get("team_id")
+        raw_task_id = data.get("id") or data.get("task_id")
+        if not raw_team_id:
+            logger.warning("task event missing 'team_id' field; using 'unknown'", extra={"event": event})
+        if not raw_task_id:
+            logger.warning("task event missing 'task_id' field; using 'unknown'", extra={"event": event})
+        team_id = _slug(raw_team_id or "unknown") or "unknown"
+        task_id = _slug(raw_task_id or "unknown") or "unknown"
         verb = event.split(".", 1)[-1] if "." in event else event
         return f"hi.tasks.{team_id}.{task_id}.{verb}"
 
