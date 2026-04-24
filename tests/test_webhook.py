@@ -132,7 +132,9 @@ class TestWebhookEndpoint:
         )
         assert response.status_code == 202
 
-    def test_webhook_invalid_payload_returns_422(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_webhook_invalid_payload_returns_422(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
         client = _build_client()
         body_bytes = json.dumps({"bad": "payload"}).encode()
@@ -146,7 +148,9 @@ class TestWebhookEndpoint:
         )
         assert response.status_code == 422
 
-    def test_webhook_missing_body_returns_422(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_webhook_missing_body_returns_422(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
         client = _build_client()
         body_bytes = b"not json"
@@ -180,7 +184,9 @@ class TestWebhookEndpoint:
         body = response.json()
         assert body["event"] == "task.updated"
 
-    def test_webhook_bad_signature_returns_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_webhook_bad_signature_returns_401(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
         client = _build_client()
         payload = {
@@ -199,12 +205,17 @@ class TestWebhookEndpoint:
         )
         assert response.status_code == 401
 
-    def test_invalid_signature_increments_failed_counter(self) -> None:
+    def test_invalid_signature_increments_failed_counter(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from prometheus_client import REGISTRY
 
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
         client = _build_client()
         labels = {"reason": "invalid_signature"}
-        before = REGISTRY.get_sample_value("hermes_webhooks_failed_total", labels) or 0.0
+        before = (
+            REGISTRY.get_sample_value("hermes_webhooks_failed_total", labels) or 0.0
+        )
         payload = {
             "event": "agent.created",
             "data": {"host": "localhost", "name": "bot"},
@@ -227,7 +238,10 @@ class TestWebhookEndpoint:
 class TestSignatureValidation:
     """Tests for _verify_signature behaviour (issue #156)."""
 
-    def test_missing_signature_header_returns_401_when_secret_configured(self) -> None:
+    def test_missing_signature_header_returns_401_when_secret_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "agent.created",
@@ -237,7 +251,10 @@ class TestSignatureValidation:
         response = client.post("/webhook", json=payload)
         assert response.status_code == 401
 
-    def test_empty_signature_header_returns_401_when_secret_configured(self) -> None:
+    def test_empty_signature_header_returns_401_when_secret_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "agent.created",

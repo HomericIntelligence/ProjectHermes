@@ -33,6 +33,7 @@ from hermes.models import (
 )
 from hermes.publisher import AGENT_EVENTS, TASK_EVENTS, Publisher
 from hermes.rate_limit import limiter, rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     for attempt in range(1, _NATS_RETRY_ATTEMPTS + 1):
         try:
             await asyncio.wait_for(
-                publisher.connect(settings.nats_url, connect_timeout=settings.nats_connect_timeout),
+                publisher.connect(
+                    settings.nats_url, connect_timeout=settings.nats_connect_timeout
+                ),
                 timeout=_NATS_CONNECT_TIMEOUT,
             )
             last_exc = None
@@ -126,7 +129,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     deadline = settings.shutdown_timeout
     poll_interval = 0.05
     elapsed = 0.0
-    logger.info("Shutdown: waiting up to %.1fs for in-flight requests to complete", deadline)
+    logger.info(
+        "Shutdown: waiting up to %.1fs for in-flight requests to complete", deadline
+    )
     while elapsed < deadline:
         async with _inflight_lock:
             remaining = _inflight
@@ -203,7 +208,10 @@ class ShutdownMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(ShutdownMiddleware)
 app.add_middleware(RequestIDMiddleware)
-app.add_middleware(PayloadSizeLimitMiddleware, max_bytes=get_settings().max_payload_bytes)
+app.add_middleware(
+    PayloadSizeLimitMiddleware, max_bytes=get_settings().max_payload_bytes
+)
+app.add_middleware(SlowAPIMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +247,10 @@ async def get_version() -> VersionResponse:
     return VersionResponse(version=__version__)
 
 
-@app.get("/ready", responses={503: {"model": ErrorResponse, "description": "NATS not connected"}})
+@app.get(
+    "/ready",
+    responses={503: {"model": ErrorResponse, "description": "NATS not connected"}},
+)
 async def ready(response: Response) -> dict[str, object]:
     """Readiness probe — returns 503 when NATS is not connected."""
     publisher: Publisher = app.state.publisher
@@ -261,14 +272,18 @@ async def ready(response: Response) -> dict[str, object]:
     },
 )
 @limiter.limit(lambda: get_settings().webhook_rate_limit)
-async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcceptedResponse:
+async def receive_webhook(
+    request: Request, settings: SettingsDep
+) -> WebhookAcceptedResponse:
     """Receive an external webhook, validate its signature, and publish to NATS."""
     raw_body = await request.body()
     request_id: str = request.state.request_id
 
     # HMAC validation (skipped when no secret is configured)
     if settings.webhook_secret:
-        _verify_signature(raw_body, request.headers.get("X-Webhook-Signature", ""), settings)
+        _verify_signature(
+            raw_body, request.headers.get("X-Webhook-Signature", ""), settings
+        )
 
     try:
         payload = WebhookPayload.model_validate_json(raw_body)
@@ -297,7 +312,11 @@ async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcc
 
     try:
         await asyncio.wait_for(
-            publisher.publish(payload, publish_timeout=settings.nats_publish_timeout, request_id=request_id),
+            publisher.publish(
+                payload,
+                publish_timeout=settings.nats_publish_timeout,
+                request_id=request_id,
+            ),
             timeout=settings.nats_publish_timeout,
         )
     except asyncio.TimeoutError:
