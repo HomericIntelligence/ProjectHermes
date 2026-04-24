@@ -78,3 +78,9 @@ class ErrorResponse(BaseModel):
     """Standard error response body."""
 
     detail: str
+
+
+class VersionResponse(BaseModel):
+    """Response body for GET /version."""
+
+    version: str
