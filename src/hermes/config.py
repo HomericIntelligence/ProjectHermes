@@ -74,6 +74,15 @@ class Settings(BaseSettings):
             return v
         raise ValueError(f"HERMES_HOST must be a valid IP or hostname, got: {v!r}")
 
+    @field_validator("webhook_rate_limit")
+    @classmethod
+    def _validate_rate_limit(cls, v: str) -> str:
+        if not re.match(r"^\d+\s*/\s*(second|minute|hour|day)$", v):
+            raise ValueError(
+                f"WEBHOOK_RATE_LIMIT must be like '100/minute', got: {v!r}"
+            )
+        return v
+
     @field_validator("webhook_secret")
     @classmethod
     def _secret_min_length(cls, v: str) -> str:

@@ -129,3 +129,53 @@ class TestHermesPublicUrl:
 
         s = Settings()
         assert s.hermes_public_url == "https://example.com/webhooks"
+
+
+class TestWebhookRateLimit:
+    def test_default_rate_limit_is_valid(self) -> None:
+        from hermes.config import Settings
+
+        s = Settings(_env_file=None)
+        assert s.webhook_rate_limit == "60/minute"
+
+    def test_rejects_invalid_rate_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("WEBHOOK_RATE_LIMIT", "not-valid")
+        from hermes.config import Settings
+
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_accepts_valid_rate_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("WEBHOOK_RATE_LIMIT", "50/minute")
+        from hermes.config import Settings
+
+        s = Settings()
+        assert "50" in s.webhook_rate_limit
+
+    def test_accepts_per_second(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("WEBHOOK_RATE_LIMIT", "10/second")
+        from hermes.config import Settings
+
+        s = Settings()
+        assert s.webhook_rate_limit == "10/second"
+
+    def test_accepts_per_hour(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("WEBHOOK_RATE_LIMIT", "1000/hour")
+        from hermes.config import Settings
+
+        s = Settings()
+        assert s.webhook_rate_limit == "1000/hour"
+
+    def test_rejects_missing_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("WEBHOOK_RATE_LIMIT", "100")
+        from hermes.config import Settings
+
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_rejects_invalid_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("WEBHOOK_RATE_LIMIT", "100/week")
+        from hermes.config import Settings
+
+        with pytest.raises(ValidationError):
+            Settings()
