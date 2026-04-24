@@ -244,16 +244,16 @@ class Publisher:
         Falls back to ``unknown`` tokens when fields are missing so messages
         are never silently dropped due to incomplete payloads.
         """
-        host = _slug(data.get("hostId") or data.get("host") or "unknown") or "unknown"
-        name = _slug(data.get("name") or "unknown") or "unknown"
+        host = _slug(data.get("hostId") or data.get("host") or "") or "unknown"
+        name = _slug(data.get("name") or "") or "unknown"
         # Strip the "agent." prefix to get the bare verb (created/updated/deleted)
         verb = event.split(".", 1)[-1] if "." in event else event
         return f"hi.agents.{host}.{name}.{verb}"
 
     def _parse_task_subject(self, data: dict[str, Any], event: str) -> str:
         """Build ``hi.tasks.{team_id}.{task_id}.{event}`` from task event data."""
-        team_id = _slug(data.get("teamId") or data.get("team_id") or "unknown") or "unknown"
-        task_id = _slug(data.get("id") or data.get("task_id") or "unknown") or "unknown"
+        team_id = _slug(data.get("teamId") or data.get("team_id") or "") or "unknown"
+        task_id = _slug(data.get("id") or data.get("task_id") or "") or "unknown"
         verb = event.split(".", 1)[-1] if "." in event else event
         return f"hi.tasks.{team_id}.{task_id}.{verb}"
 
@@ -270,6 +270,7 @@ def _slug(value: str) -> str:
     """
     return (
         str(value)
+        .strip()
         .replace(" ", "-")
         .replace(".", "-")
         .replace("*", "")

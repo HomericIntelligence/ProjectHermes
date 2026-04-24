@@ -83,16 +83,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             break
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
-            logger.error(
-                "NATS connect attempt %d/%d failed (%s: %s); retrying in %ds",
-                attempt,
-                settings.nats_retry_attempts,
-                type(exc).__name__,
-                exc,
-                settings.nats_retry_interval,
-            )
-            if attempt < settings.nats_retry_attempts:
+            will_retry = attempt < settings.nats_retry_attempts
+            if will_retry:
+                logger.error(
+                    "NATS connect attempt %d/%d failed (%s: %s); retrying in %ds",
+                    attempt,
+                    settings.nats_retry_attempts,
+                    type(exc).__name__,
+                    exc,
+                    settings.nats_retry_interval,
+                )
                 await asyncio.sleep(settings.nats_retry_interval)
+            else:
+                logger.error(
+                    "NATS connect attempt %d/%d failed (%s: %s); giving up",
+                    attempt,
+                    settings.nats_retry_attempts,
+                    type(exc).__name__,
+                    exc,
+                )
 
     if last_exc is not None:
         logger.critical(
