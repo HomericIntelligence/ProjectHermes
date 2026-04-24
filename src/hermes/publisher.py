@@ -52,6 +52,8 @@ class Publisher:
         self._dead_letters: deque[dict[str, Any]] = deque(maxlen=1000)
         self._enable_dead_letter = enable_dead_letter
         self._connected: bool = False
+        self.reconnect_count: int = 0
+        self.last_error: str = ""
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -61,11 +63,13 @@ class Publisher:
         """Connect to the NATS server, obtain JetStream context, and ensure streams exist."""
         async def _on_disconnected() -> None:
             self._connected = False
+            self.last_error = "NATS disconnected"
             logger.warning("NATS disconnected")
 
         async def _on_reconnected() -> None:
             self._connected = True
-            logger.info("NATS reconnected")
+            self.reconnect_count += 1
+            logger.info("NATS reconnected (count=%d)", self.reconnect_count)
 
         self._nc = await nats.connect(
             url,

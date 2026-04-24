@@ -66,6 +66,10 @@ class HealthResponse(BaseModel):
     inflight_requests: int = 0
     dead_letter_count: int = 0
     timeouts: TimeoutSettings | None = None
+    nats_reconnect_count: int = 0
+    nats_last_error: str = ""
+    nats_retry_attempts: int = 3
+    nats_retry_interval: float = 5.0
 
 
 class WebhookAcceptedResponse(BaseModel):

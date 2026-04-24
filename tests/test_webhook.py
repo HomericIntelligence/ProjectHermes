@@ -20,7 +20,12 @@ def _sign(body: bytes) -> str:
     return hmac_mod.new(_TEST_SECRET.encode(), body, hashlib.sha256).hexdigest()
 
 
-def _build_client(*, connected: bool = True) -> TestClient:
+def _build_client(
+    *,
+    connected: bool = True,
+    reconnect_count: int = 0,
+    last_error: str = "",
+) -> TestClient:
     """Build a TestClient with a mocked Publisher and a known webhook secret."""
     from hermes.config import get_settings
     from hermes.publisher import Publisher
@@ -31,6 +36,8 @@ def _build_client(*, connected: bool = True) -> TestClient:
     mock_publisher.active_subjects = []
     mock_publisher.dead_letter_count = 0
     mock_publisher.publish = AsyncMock()
+    mock_publisher.reconnect_count = reconnect_count
+    mock_publisher.last_error = last_error
 
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
@@ -117,6 +124,42 @@ class TestHealthEndpoint:
         client = TestClient(app, raise_server_exceptions=True)
         body = client.get("/health").json()
         assert body["dead_letter_count"] == 7
+
+    def test_health_includes_nats_reconnect_count(self) -> None:
+        client = _build_client(reconnect_count=3)
+        body = client.get("/health").json()
+        assert "nats_reconnect_count" in body
+        assert body["nats_reconnect_count"] == 3
+
+    def test_health_reconnect_count_defaults_to_zero(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert body["nats_reconnect_count"] == 0
+
+    def test_health_includes_nats_last_error(self) -> None:
+        client = _build_client(last_error="NATS disconnected")
+        body = client.get("/health").json()
+        assert "nats_last_error" in body
+        assert body["nats_last_error"] == "NATS disconnected"
+
+    def test_health_last_error_defaults_to_empty_string(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert body["nats_last_error"] == ""
+
+    def test_health_includes_nats_retry_attempts(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "nats_retry_attempts" in body
+        assert isinstance(body["nats_retry_attempts"], int)
+        assert body["nats_retry_attempts"] == 3
+
+    def test_health_includes_nats_retry_interval(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "nats_retry_interval" in body
+        assert isinstance(body["nats_retry_interval"], float)
+        assert body["nats_retry_interval"] == 5.0
 
 
 class TestReadyEndpoint:

@@ -254,6 +254,10 @@ async def health(response: Response) -> HealthResponse:
             nats_publish=cfg.nats_publish_timeout,
             agamemnon=cfg.agamemnon_timeout,
         ),
+        nats_reconnect_count=publisher.reconnect_count,
+        nats_last_error=publisher.last_error,
+        nats_retry_attempts=_NATS_RETRY_ATTEMPTS,
+        nats_retry_interval=float(_NATS_RETRY_INTERVAL),
     )
 
 

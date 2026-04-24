@@ -79,6 +79,52 @@ class TestPublisherConnectionCallbacks:
         assert pub.is_connected is True
 
     @pytest.mark.asyncio
+    async def test_reconnected_cb_increments_reconnect_count(self) -> None:
+        pub = Publisher()
+        mock_nc = MagicMock()
+        mock_nc.jetstream.return_value = MagicMock()
+        jsm = AsyncMock()
+        jsm.find_stream = AsyncMock()
+        mock_nc.jsm.return_value = jsm
+
+        captured_callbacks: dict[str, object] = {}
+
+        async def fake_connect(url: str, **kwargs: object) -> MagicMock:
+            captured_callbacks.update(kwargs)
+            return mock_nc
+
+        with patch("nats.connect", side_effect=fake_connect):
+            await pub.connect("nats://localhost:4222")
+
+        assert pub.reconnect_count == 0
+        await captured_callbacks["reconnected_cb"]()  # type: ignore[operator]
+        assert pub.reconnect_count == 1
+        await captured_callbacks["reconnected_cb"]()  # type: ignore[operator]
+        assert pub.reconnect_count == 2
+
+    @pytest.mark.asyncio
+    async def test_disconnected_cb_sets_last_error(self) -> None:
+        pub = Publisher()
+        mock_nc = MagicMock()
+        mock_nc.jetstream.return_value = MagicMock()
+        jsm = AsyncMock()
+        jsm.find_stream = AsyncMock()
+        mock_nc.jsm.return_value = jsm
+
+        captured_callbacks: dict[str, object] = {}
+
+        async def fake_connect(url: str, **kwargs: object) -> MagicMock:
+            captured_callbacks.update(kwargs)
+            return mock_nc
+
+        with patch("nats.connect", side_effect=fake_connect):
+            await pub.connect("nats://localhost:4222")
+
+        assert pub.last_error == ""
+        await captured_callbacks["disconnected_cb"]()  # type: ignore[operator]
+        assert pub.last_error == "NATS disconnected"
+
+    @pytest.mark.asyncio
     async def test_disconnect_method_clears_connected_flag(self) -> None:
         pub = Publisher()
         mock_nc = MagicMock()
