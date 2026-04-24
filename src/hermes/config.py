@@ -31,12 +31,12 @@ class Settings(BaseSettings):
     hermes_port: int = 8080
     hermes_public_url: Optional[str] = None
     webhook_secret: str = ""
-    nats_connect_timeout: float = 5.0
-    nats_publish_timeout: float = 5.0
+    nats_connect_timeout: float = Field(default=5.0, gt=0)
+    nats_publish_timeout: float = Field(default=5.0, gt=0)
     nats_retry_attempts: int = Field(default=3, ge=1)
     nats_retry_interval: float = Field(default=5.0, gt=0)
-    agamemnon_timeout: float = 10.0
-    shutdown_timeout: float = 10.0
+    agamemnon_timeout: float = Field(default=10.0, gt=0)
+    shutdown_timeout: float = Field(default=10.0, gt=0)
     max_payload_bytes: int = 1_048_576
     enable_dead_letter: bool = True
     log_json: bool = False

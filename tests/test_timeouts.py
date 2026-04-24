@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from hermes.config import Settings
 from hermes.models import WebhookPayload
@@ -157,3 +158,35 @@ class TestPublisherPublishTimeout:
         pub = Publisher()
         with pytest.raises(RuntimeError, match="not connected"):
             await pub.publish(self._make_payload())
+
+
+class TestTimeoutValidation:
+    def test_nats_connect_timeout_rejects_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NATS_CONNECT_TIMEOUT", "0")
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_nats_connect_timeout_rejects_negative(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NATS_CONNECT_TIMEOUT", "-1")
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_nats_publish_timeout_rejects_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NATS_PUBLISH_TIMEOUT", "0")
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_nats_publish_timeout_rejects_negative(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NATS_PUBLISH_TIMEOUT", "-5")
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_agamemnon_timeout_rejects_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AGAMEMNON_TIMEOUT", "0")
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_agamemnon_timeout_rejects_negative(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AGAMEMNON_TIMEOUT", "-0.1")
+        with pytest.raises(ValidationError):
+            Settings()
