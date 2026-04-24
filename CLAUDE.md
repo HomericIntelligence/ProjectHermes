@@ -24,7 +24,9 @@ NATS JetStream (via ProjectKeystone)
     │
     ├──► Argus      (observability)
     ├──► Agamemnon  (coordination)
-    └──► Telemachy  (workflow engine)
+    ├──► Telemachy  (workflow engine)
+    │
+    └──► homeric-deadletter (unknown event types)
 ```
 
 **Subject schema:**
@@ -35,14 +37,21 @@ NATS JetStream (via ProjectKeystone)
 sanitised and truncated to **64 characters** (`_SLUG_MAX_LEN = 64` in `publisher.py`).
 Values that exceed 64 characters are silently truncated before routing.
 
+Unknown event types are routed to the `homeric-deadletter` NATS stream for inspection and replay.
+
 ## Configuration
 
-| Variable          | Default                        | Description                                             |
-|-------------------|--------------------------------|---------------------------------------------------------|
-| NATS_URL          | nats://localhost:4222          | NATS server URL                                         |
-| HERMES_PORT       | 8080                           | Port Hermes listens on                                  |
-| HERMES_PUBLIC_URL | http://localhost:{HERMES_PORT} | Externally-reachable base URL for the /webhook endpoint |
-| WEBHOOK_SECRET    |                                | HMAC secret for webhook validation                      |
+| Variable              | Default                        | Description                                             |
+|-----------------------|--------------------------------|---------------------------------------------------------|
+| NATS_URL              | nats://localhost:4222          | NATS server URL                                         |
+| HERMES_HOST           | 127.0.0.1                     | Host/IP the server binds to                             |
+| HERMES_PORT           | 8080                           | Port Hermes listens on                                  |
+| HERMES_PUBLIC_URL     | http://localhost:{HERMES_PORT} | Externally-reachable base URL for the /webhook endpoint |
+| WEBHOOK_SECRET        |                                | HMAC secret for webhook validation                      |
+| NATS_CONNECT_TIMEOUT  | 5.0                            | NATS connection timeout in seconds                      |
+| NATS_PUBLISH_TIMEOUT  | 5.0                            | NATS publish timeout in seconds                         |
+| AGAMEMNON_TIMEOUT     | 10.0                           | Agamemnon API call timeout in seconds                   |
+| SHUTDOWN_TIMEOUT      | 10.0                           | Graceful shutdown timeout in seconds                    |
 
 Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webhook`.
 
@@ -66,4 +75,6 @@ just lint       # ruff check src tests
 just format     # ruff format src tests
 just health     # curl /health endpoint
 just nats-start # start NATS server
+
+python -m hermes # alternative to 'just start' — runs the server directly
 ```
