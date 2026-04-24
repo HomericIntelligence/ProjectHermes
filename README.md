@@ -69,6 +69,25 @@ hi.tasks.{team_id}.{task_id}.{event}
 
 Example: `hi.tasks.team-alpha.task-42.updated`
 
+## Endpoints
+
+Hermes exposes several endpoints for webhooks, health checks, and observability:
+
+| Endpoint         | Method | Description                                                                         | Status Code |
+|------------------|--------|-------------------------------------------------------------------------------------| ----------- |
+| `/webhook`       | POST   | Accept and validate incoming webhooks; publishes to NATS                            | 200 / 401 / 422 |
+| `/health`        | GET    | Service health check; returns NATS connection status                                | 200 / 503   |
+| `/ready`         | GET    | Readiness probe for orchestrators (Kubernetes, Docker Compose)                      | 200 / 503   |
+| `/metrics`       | GET    | Prometheus metrics (counter, gauge, histogram)                                      | 200         |
+| `/subjects`      | GET    | List all NATS subjects published to in this session                                 | 200         |
+| `/events`        | GET    | Canonical list of supported webhook event types (agent_events, task_events)         | 200         |
+| `/dead-letters`  | GET    | View in-memory dead-letter queue of unroutable events                               | 200         |
+
+### Health Checks
+
+- **`/health`** returns `200 OK` when NATS is connected, `503 Service Unavailable` when disconnected. Use this for liveness probes and metrics scraping (e.g., Prometheus).
+- **`/ready`** returns `200 OK` when ready to accept webhooks (NATS connected), `503 Service Unavailable` otherwise. Use for Kubernetes readiness probes.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in values:
@@ -116,6 +135,27 @@ If connection issues occur, check:
 2. Network connectivity and firewall rules
 3. TLS configuration if using `tls://` scheme
 4. Application logs for specific error messages
+
+## TLS Configuration
+
+For production deployments, Hermes can be configured to use TLS for NATS connections. Set the following environment variables:
+
+| Variable       | Description                                                            |
+|----------------|------------------------------------------------------------------------|
+| TLS_CA_BUNDLE  | Path to CA certificate bundle file (for server certificate validation) |
+| TLS_CERT_FILE  | Path to client certificate file (for mTLS)                            |
+| TLS_KEY_FILE   | Path to client private key file (for mTLS)                            |
+| TLS_VERIFY     | Enable/disable hostname verification (default: true)                  |
+
+Example with mTLS (mutual TLS):
+
+```bash
+export NATS_URL=tls://nats.example.com:4222
+export TLS_CERT_FILE=/etc/hermes/certs/client-cert.pem
+export TLS_KEY_FILE=/etc/hermes/certs/client-key.pem
+export TLS_CA_BUNDLE=/etc/hermes/certs/ca-bundle.crt
+just start
+```
 
 ## Development
 
