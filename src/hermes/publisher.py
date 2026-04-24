@@ -121,7 +121,7 @@ class Publisher:
             {
                 "event": payload.event,
                 "data": payload.data,
-                "timestamp": payload.timestamp,
+                "timestamp": payload.timestamp.isoformat(),
                 "request_id": request_id,
             }
         ).encode()
