@@ -88,7 +88,8 @@ class Publisher:
             except NotFoundError:
                 await jsm.add_stream(StreamConfig(name=name, subjects=subjects))
                 logger.info("Created JetStream stream: %s (%s)", name, subjects)
-            self._stream_names.append(name)
+            if name not in self._stream_names:
+                self._stream_names.append(name)
 
     async def disconnect(self) -> None:
         """Drain and close the NATS connection."""

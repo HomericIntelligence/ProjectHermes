@@ -136,6 +136,20 @@ class TestEnsureStreams:
         assert names == {"homeric-agents", "homeric-tasks", "homeric-deadletter"}
 
     @pytest.mark.asyncio
+    async def test_stream_names_no_duplicates_on_repeated_ensure(self) -> None:
+        pub = self._make_connected_publisher()
+        jsm = AsyncMock()
+        jsm.stream_info = AsyncMock(return_value=MagicMock())
+        jsm.add_stream = AsyncMock()
+        pub._nc.jsm.return_value = jsm
+
+        await pub._ensure_streams()
+        initial_count = len(pub._stream_names)
+        await pub._ensure_streams()
+
+        assert len(pub._stream_names) == initial_count
+
+    @pytest.mark.asyncio
     async def test_non_notfounderror_propagates(self) -> None:
         pub = self._make_connected_publisher()
         jsm = AsyncMock()
