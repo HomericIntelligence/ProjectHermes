@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import AsyncGenerator
 
@@ -9,16 +10,19 @@ import nats
 import pytest
 import pytest_asyncio
 
+import hermes.server as _server
 from hermes.config import get_settings
 from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
 
 
 @pytest.fixture(autouse=True)
-def clear_settings_cache():
-    get_settings.cache_clear()
+def reset_server_state() -> None:
+    _server._shutdown_event = asyncio.Event()
+    _server._inflight = 0
     yield
-    get_settings.cache_clear()
+    _server._shutdown_event = asyncio.Event()
+    _server._inflight = 0
 
 
 def _nats_url() -> str:
