@@ -166,3 +166,25 @@ async def test_lifespan_no_warn_on_loopback_bind(mock_publisher: MagicMock) -> N
 
     warning_messages = [call.args[0] for call in mock_logger.warning.call_args_list]
     assert not any("0.0.0.0" in msg for msg in warning_messages)
+
+
+@pytest.mark.anyio
+async def test_last_retry_logs_giving_up_not_retrying(mock_publisher: MagicMock) -> None:
+    """The final attempt logs 'giving up', not 'retrying in Xs'."""
+    from hermes.server import lifespan, app
+
+    mock_publisher.connect.side_effect = RuntimeError("boom")
+
+    with (
+        patch("hermes.server.Publisher", return_value=mock_publisher),
+        patch("hermes.server.asyncio.sleep", new_callable=AsyncMock),
+        patch("hermes.server.logger") as mock_logger,
+        pytest.raises(RuntimeError),
+    ):
+        async with lifespan(app):
+            pass
+
+    last_error_call = mock_logger.error.call_args_list[-1]
+    last_format_string: str = last_error_call.args[0]
+    assert "retrying" not in last_format_string.lower()
+    assert "giving up" in last_format_string.lower()

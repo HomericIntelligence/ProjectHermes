@@ -85,6 +85,16 @@ class TestAgentSubjectMapping:
         assert "*" not in subject
         assert ">" not in subject
 
+    def test_whitespace_only_host_falls_back_to_unknown(self) -> None:
+        pub = _make_publisher()
+        subject = pub._parse_agent_subject({"host": "   ", "name": "bot"}, "agent.created")
+        assert subject == "hi.agents.unknown.bot.created"
+
+    def test_whitespace_only_name_falls_back_to_unknown(self) -> None:
+        pub = _make_publisher()
+        subject = pub._parse_agent_subject({"host": "myhost", "name": "   "}, "agent.created")
+        assert subject == "hi.agents.myhost.unknown.created"
+
 
 class TestTaskSubjectMapping:
     """Task event → NATS subject routing."""
@@ -184,6 +194,9 @@ class TestEnsureStreams:
 
 class TestSlugSanitisation:
     """Unit tests for the _slug() helper covering wildcard sanitisation."""
+
+    def test_whitespace_only_returns_empty_string(self) -> None:
+        assert _slug("   ") == ""
 
     def test_wildcard_star_is_removed(self) -> None:
         assert "*" not in _slug("test*")
