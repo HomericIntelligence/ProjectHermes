@@ -117,6 +117,10 @@ class Publisher:
     def dead_letters(self) -> list[dict[str, Any]]:
         return list(self._dead_letters)
 
+    @property
+    def dead_letter_count(self) -> int:
+        return len(self._dead_letters)
+
     # ------------------------------------------------------------------
     # Publishing
     # ------------------------------------------------------------------

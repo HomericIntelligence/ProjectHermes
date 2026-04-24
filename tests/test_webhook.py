@@ -27,6 +27,7 @@ def _build_client(*, connected: bool = True) -> TestClient:
     mock_publisher = MagicMock(spec=Publisher)
     mock_publisher.is_connected = connected
     mock_publisher.active_subjects = []
+    mock_publisher.dead_letter_count = 0
     mock_publisher.publish = AsyncMock()
 
     # Inject the mock before the test client starts
@@ -83,6 +84,35 @@ class TestHealthEndpoint:
         assert "inflight_requests" in body
         assert isinstance(body["inflight_requests"], int)
         assert body["inflight_requests"] >= 0
+
+    def test_health_includes_timeout_fields(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "timeouts" in body
+        assert body["timeouts"]["nats_connect"] > 0
+        assert body["timeouts"]["nats_publish"] > 0
+        assert body["timeouts"]["agamemnon"] > 0
+
+    def test_health_includes_dead_letter_count(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "dead_letter_count" in body
+        assert isinstance(body["dead_letter_count"], int)
+
+    def test_health_dead_letter_count_reflects_publisher(self) -> None:
+        from hermes.publisher import Publisher
+        from hermes.server import app
+
+        mock_publisher = MagicMock(spec=Publisher)
+        mock_publisher.is_connected = True
+        mock_publisher.active_subjects = []
+        mock_publisher.dead_letter_count = 7
+        mock_publisher.publish = AsyncMock()
+        app.state.publisher = mock_publisher
+
+        client = TestClient(app, raise_server_exceptions=True)
+        body = client.get("/health").json()
+        assert body["dead_letter_count"] == 7
 
 
 class TestReadyEndpoint:

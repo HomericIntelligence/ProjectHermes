@@ -27,6 +27,7 @@ from hermes.models import (
     ErrorResponse,
     HealthResponse,
     SubjectsResponse,
+    TimeoutSettings,
     VersionResponse,
     WebhookAcceptedResponse,
     WebhookPayload,
@@ -238,6 +239,12 @@ async def health(response: Response) -> HealthResponse:
         hmac_validation_enabled=bool(cfg.webhook_secret),
         hermes_public_url=cfg.hermes_public_url,
         inflight_requests=_inflight,
+        dead_letter_count=publisher.dead_letter_count,
+        timeouts=TimeoutSettings(
+            nats_connect=cfg.nats_connect_timeout,
+            nats_publish=cfg.nats_publish_timeout,
+            agamemnon=cfg.agamemnon_timeout,
+        ),
     )
 
 

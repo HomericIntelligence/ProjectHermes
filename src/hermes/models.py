@@ -31,6 +31,14 @@ class WebhookPayload(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class TimeoutSettings(BaseModel):
+    """Timeout values (seconds) surfaced in /health for observability."""
+
+    nats_connect: float
+    nats_publish: float
+    agamemnon: float
+
+
 class HealthResponse(BaseModel):
     """Response body for GET /health."""
 
@@ -40,6 +48,8 @@ class HealthResponse(BaseModel):
     hmac_validation_enabled: bool = False
     hermes_public_url: str | None = None
     inflight_requests: int = 0
+    dead_letter_count: int = 0
+    timeouts: TimeoutSettings | None = None
 
 
 class WebhookAcceptedResponse(BaseModel):
