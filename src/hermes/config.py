@@ -8,7 +8,7 @@ from functools import lru_cache
 from ipaddress import ip_address
 from typing import Optional
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _MIN_SECRET_LENGTH = 32
@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     webhook_secret: str = ""
     nats_connect_timeout: float = 5.0
     nats_publish_timeout: float = 5.0
+    nats_retry_attempts: int = Field(default=3, ge=1)
+    nats_retry_interval: float = Field(default=5.0, gt=0)
     agamemnon_timeout: float = 10.0
     shutdown_timeout: float = 10.0
     max_payload_bytes: int = 1_048_576

@@ -46,8 +46,6 @@ _inflight: int = 0
 _inflight_lock: asyncio.Lock = asyncio.Lock()
 
 _NATS_CONNECT_TIMEOUT = 5
-_NATS_RETRY_ATTEMPTS = 3
-_NATS_RETRY_INTERVAL = 5
 
 _REQUEST_ID_HEADER = "X-Request-ID"
 _REQUEST_ID_RE = re.compile(r"^[a-zA-Z0-9\-_]{1,128}$")
@@ -71,7 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     publisher = Publisher(enable_dead_letter=settings.enable_dead_letter)
     last_exc: Exception | None = None
-    for attempt in range(1, _NATS_RETRY_ATTEMPTS + 1):
+    for attempt in range(1, settings.nats_retry_attempts + 1):
         try:
             await asyncio.wait_for(
                 publisher.connect(
@@ -86,19 +84,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.error(
                 "NATS connect attempt %d/%d failed (%s: %s); retrying in %ds",
                 attempt,
-                _NATS_RETRY_ATTEMPTS,
+                settings.nats_retry_attempts,
                 type(exc).__name__,
                 exc,
-                _NATS_RETRY_INTERVAL,
+                settings.nats_retry_interval,
             )
-            if attempt < _NATS_RETRY_ATTEMPTS:
-                await asyncio.sleep(_NATS_RETRY_INTERVAL)
+            if attempt < settings.nats_retry_attempts:
+                await asyncio.sleep(settings.nats_retry_interval)
 
     if last_exc is not None:
         logger.critical(
             "Could not connect to NATS at %s after %d attempts; aborting startup",
             settings.nats_url,
-            _NATS_RETRY_ATTEMPTS,
+            settings.nats_retry_attempts,
         )
         raise last_exc
 
