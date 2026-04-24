@@ -30,6 +30,22 @@ jobs:
           pixi-version: latest
           cache: true
 
+      - name: Check version consistency
+        run: |
+          set -e
+          PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          PIXI_VERSION=$(grep '^version = ' pixi.toml | sed 's/version = "\(.*\)"/\1/')
+
+          if [ "$PYPROJECT_VERSION" != "$PIXI_VERSION" ]; then
+            echo "Version mismatch: pyproject.toml ($PYPROJECT_VERSION) != pixi.toml ($PIXI_VERSION)"
+            exit 1
+          fi
+
+          echo "Version check passed: $PYPROJECT_VERSION"
+
+      - name: Run pre-commit
+        run: pip install pre-commit && pre-commit run --all-files
+
       - name: Lint
         run: pixi run lint
 
