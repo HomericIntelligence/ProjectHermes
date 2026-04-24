@@ -106,7 +106,8 @@ async def test_lifespan_disconnect_called_on_shutdown(mock_publisher: MagicMock)
 @pytest.mark.anyio
 async def test_lifespan_error_log_includes_attempt_info(mock_publisher: MagicMock) -> None:
     """Each error log call contains attempt number and retry count."""
-    from hermes.server import lifespan, app, _NATS_RETRY_ATTEMPTS
+    from hermes.server import lifespan, app
+    from hermes.config import get_settings
 
     mock_publisher.connect.side_effect = RuntimeError("boom")
 
@@ -119,11 +120,12 @@ async def test_lifespan_error_log_includes_attempt_info(mock_publisher: MagicMoc
         async with lifespan(app):
             pass
 
+    retry_attempts = get_settings().nats_retry_attempts
     for i, logged_call in enumerate(mock_logger.error.call_args_list, start=1):
         args = logged_call.args
         # First positional arg after the format string: attempt number
         assert args[1] == i
-        assert args[2] == _NATS_RETRY_ATTEMPTS
+        assert args[2] == retry_attempts
 
 
 @pytest.mark.anyio

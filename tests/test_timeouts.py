@@ -48,6 +48,41 @@ class TestTimeoutSettings:
         assert s.agamemnon_timeout == 20.0
 
 
+    def test_nats_retry_attempts_default(self) -> None:
+        """nats_retry_attempts defaults to 3."""
+        s = Settings()
+        assert s.nats_retry_attempts == 3
+
+    def test_nats_retry_interval_default(self) -> None:
+        """nats_retry_interval defaults to 5.0 seconds."""
+        s = Settings()
+        assert s.nats_retry_interval == 5.0
+
+    def test_nats_retry_attempts_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """nats_retry_attempts can be overridden via NATS_RETRY_ATTEMPTS."""
+        monkeypatch.setenv("NATS_RETRY_ATTEMPTS", "5")
+        s = Settings()
+        assert s.nats_retry_attempts == 5
+
+    def test_nats_retry_interval_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """nats_retry_interval can be overridden via NATS_RETRY_INTERVAL."""
+        monkeypatch.setenv("NATS_RETRY_INTERVAL", "10.0")
+        s = Settings()
+        assert s.nats_retry_interval == 10.0
+
+    def test_nats_retry_attempts_minimum_is_one(self) -> None:
+        """nats_retry_attempts rejects values below 1."""
+        import pytest as _pytest
+        with _pytest.raises(Exception):
+            Settings(nats_retry_attempts=0)
+
+    def test_nats_retry_interval_must_be_positive(self) -> None:
+        """nats_retry_interval rejects non-positive values."""
+        import pytest as _pytest
+        with _pytest.raises(Exception):
+            Settings(nats_retry_interval=0.0)
+
+
 class TestPublisherConnectTimeout:
     """Publisher.connect() passes connect_timeout to nats.connect()."""
 
