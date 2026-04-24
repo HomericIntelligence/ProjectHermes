@@ -219,6 +219,7 @@ async def health(response: Response) -> HealthResponse:
         shutting_down=_shutdown_event.is_set(),
         hmac_validation_enabled=bool(cfg.webhook_secret),
         hermes_public_url=cfg.hermes_public_url,
+        inflight_requests=_inflight,
     )
 
 
