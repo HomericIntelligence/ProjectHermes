@@ -499,6 +499,38 @@ class TestPayloadSizeLimit:
         assert tc.post("/", content=b"x" * 10).status_code == 200
         assert tc.post("/", content=b"x" * 11).status_code == 413
 
+    def test_oversized_content_length_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        client = _build_client()
+        with caplog.at_level(logging.WARNING, logger="hermes.middleware"):
+            client.post(
+                "/webhook",
+                content=b"x" * 100,
+                headers={
+                    "Content-Type": "application/octet-stream",
+                    "Content-Length": str(2_000_000),
+                    "X-Webhook-Signature": _sign(b"x" * 100),
+                },
+            )
+        assert any("2000000" in r.message and "1048576" in r.message for r in caplog.records)
+
+    def test_oversized_body_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        client = _build_client()
+        body_bytes = b"x" * (1_048_576 + 1)
+        with caplog.at_level(logging.WARNING, logger="hermes.middleware"):
+            client.post(
+                "/webhook",
+                content=body_bytes,
+                headers={
+                    "Content-Type": "application/octet-stream",
+                    "X-Webhook-Signature": _sign(body_bytes),
+                },
+            )
+        assert any("1048577" in r.message and "1048576" in r.message for r in caplog.records)
+
 
 class TestWildcardInjectionSanitization:
     """Verify that wildcard characters in webhook payloads are sanitized before publish (#152)."""

@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Callable, Awaitable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
+
+logger = logging.getLogger(__name__)
 
 
 class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
@@ -22,13 +25,24 @@ class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
         content_length = request.headers.get("Content-Length")
         if content_length is not None:
             try:
-                if int(content_length) > self.max_bytes:
+                cl_int = int(content_length)
+                if cl_int > self.max_bytes:
+                    logger.warning(
+                        "Payload rejected: Content-Length %d exceeds limit %d",
+                        cl_int,
+                        self.max_bytes,
+                    )
                     return Response(status_code=413)
             except ValueError:
                 pass
 
         body = await request.body()
         if len(body) > self.max_bytes:
+            logger.warning(
+                "Payload rejected: body size %d exceeds limit %d",
+                len(body),
+                self.max_bytes,
+            )
             return Response(status_code=413)
 
         return await call_next(request)

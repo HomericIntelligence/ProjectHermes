@@ -48,6 +48,7 @@ Unknown event types are routed to the `homeric-deadletter` NATS stream for inspe
 | HERMES_PORT           | 8080                           | Port Hermes listens on                                  |
 | HERMES_PUBLIC_URL     | http://localhost:{HERMES_PORT} | Externally-reachable base URL for the /webhook endpoint |
 | WEBHOOK_SECRET        |                                | HMAC secret for webhook validation (minimum 32 characters) |
+| MAX_PAYLOAD_BYTES     | 1048576                        | Maximum accepted request body size in bytes (1 MB)      |
 | NATS_CONNECT_TIMEOUT  | 5.0                            | NATS connection timeout in seconds                      |
 | NATS_PUBLISH_TIMEOUT  | 5.0                            | NATS publish timeout in seconds                         |
 | AGAMEMNON_TIMEOUT     | 10.0                           | Agamemnon API call timeout in seconds                   |

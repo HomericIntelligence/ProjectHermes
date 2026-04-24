@@ -129,6 +129,46 @@ async def test_lifespan_error_log_includes_attempt_info(mock_publisher: MagicMoc
 
 
 @pytest.mark.anyio
+async def test_lifespan_no_sleep_after_last_retry(mock_publisher: MagicMock) -> None:
+    """Sleep is called only between attempts, not after the final failed attempt."""
+    from hermes.server import lifespan, app, _NATS_RETRY_ATTEMPTS
+
+    mock_publisher.connect.side_effect = RuntimeError("boom")
+
+    with (
+        patch("hermes.server.Publisher", return_value=mock_publisher),
+        patch("hermes.server.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        patch("hermes.server.logger"),
+        pytest.raises(RuntimeError),
+    ):
+        async with lifespan(app):
+            pass
+
+    assert mock_sleep.await_count == _NATS_RETRY_ATTEMPTS - 1
+
+
+@pytest.mark.anyio
+async def test_lifespan_last_error_log_omits_retry_message(mock_publisher: MagicMock) -> None:
+    """The final error log must not claim a retry is coming."""
+    from hermes.server import lifespan, app
+
+    mock_publisher.connect.side_effect = RuntimeError("boom")
+
+    with (
+        patch("hermes.server.Publisher", return_value=mock_publisher),
+        patch("hermes.server.asyncio.sleep", new_callable=AsyncMock),
+        patch("hermes.server.logger") as mock_logger,
+        pytest.raises(RuntimeError),
+    ):
+        async with lifespan(app):
+            pass
+
+    last_call_args = mock_logger.error.call_args_list[-1].args
+    # The last positional arg is the suffix — empty string means no "retrying" message
+    assert last_call_args[-1] == ""
+
+
+@pytest.mark.anyio
 async def test_lifespan_warns_on_all_interfaces_bind(mock_publisher: MagicMock) -> None:
     """A WARNING is logged when hermes_host is 0.0.0.0."""
     from hermes.config import Settings
