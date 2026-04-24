@@ -18,6 +18,11 @@ class TestParseArgs:
         args = _parse_args([])
         assert args.host == "0.0.0.0"
         assert args.log_level == "info"
+        assert args.reload is False
+
+    def test_reload_flag(self) -> None:
+        args = _parse_args(["--reload"])
+        assert args.reload is True
 
     def test_custom_host(self) -> None:
         args = _parse_args(["--host", "127.0.0.1"])
@@ -58,6 +63,7 @@ class TestMain:
             host="127.0.0.1",
             port=9090,
             log_level="warning",
+            reload=False,
         )
 
     def test_main_default_args(self) -> None:
@@ -72,4 +78,26 @@ class TestMain:
             host="0.0.0.0",
             port=get_settings().hermes_port,
             log_level="info",
+            reload=False,
         )
+
+    def test_main_reload_flag(self) -> None:
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}):
+            main(["--reload"])
+
+        mock_uvicorn.run.assert_called_once_with(
+            "hermes.server:app",
+            host="0.0.0.0",
+            port=mock_uvicorn.run.call_args[1]["port"],
+            log_level="info",
+            reload=True,
+        )
+
+    def test_main_no_reload_flag(self) -> None:
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}):
+            main([])
+
+        _, kwargs = mock_uvicorn.run.call_args
+        assert kwargs.get("reload") is False

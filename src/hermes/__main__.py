@@ -34,6 +34,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=["debug", "info", "warning", "error", "critical"],
         help="Logging level (default: info)",
     )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable hot-reload (development mode)",
+    )
     return parser.parse_args(argv)
 
 
@@ -54,6 +59,7 @@ def main(argv: list[str] | None = None) -> None:
         host=args.host,
         port=args.port,
         log_level=args.log_level,
+        reload=args.reload,
     )
 
 
