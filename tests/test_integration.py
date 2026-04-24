@@ -275,15 +275,18 @@ class TestLifespan:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Lifespan raises when NATS is unreachable after all retry attempts."""
+        from unittest.mock import patch
+        from hermes.config import Settings
         from hermes.server import lifespan
         from fastapi import FastAPI
 
-        monkeypatch.setenv("NATS_URL", "nats://127.0.0.1:19999")  # nothing listening here
+        bad_settings = Settings(nats_url="nats://127.0.0.1:19999")
         test_app = FastAPI()
 
-        with pytest.raises(Exception):
-            async with lifespan(test_app):
-                pass
+        with patch("hermes.server.get_settings", return_value=bad_settings):
+            with pytest.raises(Exception):
+                async with lifespan(test_app):
+                    pass
 
 
 # ---------------------------------------------------------------------------
