@@ -128,3 +128,43 @@ async def test_lifespan_error_log_includes_attempt_info(mock_publisher: MagicMoc
         # First positional arg after the format string: attempt number
         assert args[1] == i
         assert args[2] == _NATS_RETRY_ATTEMPTS
+
+
+@pytest.mark.anyio
+async def test_lifespan_warns_on_all_interfaces_bind(mock_publisher: MagicMock) -> None:
+    """A WARNING is logged when hermes_host is 0.0.0.0."""
+    from hermes.config import Settings
+    from hermes.server import lifespan, app
+
+    settings = Settings(hermes_host="0.0.0.0", _env_file=None)
+
+    with (
+        patch("hermes.server.Publisher", return_value=mock_publisher),
+        patch("hermes.server.get_settings", return_value=settings),
+        patch("hermes.server.logger") as mock_logger,
+    ):
+        async with lifespan(app):
+            pass
+
+    warning_messages = [call.args[0] for call in mock_logger.warning.call_args_list]
+    assert any("0.0.0.0" in msg for msg in warning_messages)
+
+
+@pytest.mark.anyio
+async def test_lifespan_no_warn_on_loopback_bind(mock_publisher: MagicMock) -> None:
+    """No 0.0.0.0 WARNING is logged when hermes_host is 127.0.0.1."""
+    from hermes.config import Settings
+    from hermes.server import lifespan, app
+
+    settings = Settings(hermes_host="127.0.0.1", _env_file=None)
+
+    with (
+        patch("hermes.server.Publisher", return_value=mock_publisher),
+        patch("hermes.server.get_settings", return_value=settings),
+        patch("hermes.server.logger") as mock_logger,
+    ):
+        async with lifespan(app):
+            pass
+
+    warning_messages = [call.args[0] for call in mock_logger.warning.call_args_list]
+    assert not any("0.0.0.0" in msg for msg in warning_messages)

@@ -6,6 +6,7 @@ import os
 import sys
 
 import pytest
+from pydantic import ValidationError
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -40,6 +41,50 @@ class TestHermesHostDefault:
 
         s = Settings()
         assert s.hermes_host != "0.0.0.0"
+
+
+class TestHermesHostValidation:
+    def test_rejects_invalid_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HERMES_HOST", "not@valid!")
+        from hermes.config import Settings
+
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_accepts_ipv4_address(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HERMES_HOST", "192.168.1.1")
+        from hermes.config import Settings
+
+        s = Settings()
+        assert s.hermes_host == "192.168.1.1"
+
+    def test_accepts_localhost(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HERMES_HOST", "localhost")
+        from hermes.config import Settings
+
+        s = Settings()
+        assert s.hermes_host == "localhost"
+
+    def test_accepts_all_interfaces(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HERMES_HOST", "0.0.0.0")
+        from hermes.config import Settings
+
+        s = Settings()
+        assert s.hermes_host == "0.0.0.0"
+
+    def test_accepts_fqdn(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HERMES_HOST", "my-host.example.com")
+        from hermes.config import Settings
+
+        s = Settings()
+        assert s.hermes_host == "my-host.example.com"
+
+    def test_accepts_ipv6_address(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HERMES_HOST", "::1")
+        from hermes.config import Settings
+
+        s = Settings()
+        assert s.hermes_host == "::1"
 
 
 class TestHermesPublicUrl:

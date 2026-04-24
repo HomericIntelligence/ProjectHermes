@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import re
 import ssl
 from functools import lru_cache
+from ipaddress import ip_address
 from typing import Optional
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _MIN_SECRET_LENGTH = 32
+_HOSTNAME_RE = re.compile(
+    r"^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$"
+)
 
 
 class Settings(BaseSettings):
@@ -39,6 +44,18 @@ class Settings(BaseSettings):
         if self.hermes_public_url is None:
             self.hermes_public_url = f"http://localhost:{self.hermes_port}"
         return self
+
+    @field_validator("hermes_host")
+    @classmethod
+    def _validate_host(cls, v: str) -> str:
+        try:
+            ip_address(v)
+            return v
+        except ValueError:
+            pass
+        if _HOSTNAME_RE.match(v):
+            return v
+        raise ValueError(f"HERMES_HOST must be a valid IP or hostname, got: {v!r}")
 
     @field_validator("webhook_secret")
     @classmethod

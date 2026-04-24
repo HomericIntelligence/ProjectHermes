@@ -109,6 +109,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "HMAC webhook validation is DISABLED — set WEBHOOK_SECRET to enable signature verification"
         )
 
+    if settings.hermes_host == "0.0.0.0":
+        logger.warning("Server binding to 0.0.0.0 exposes all network interfaces")
+
     _log_startup_banner(publisher, settings)
     app.state.publisher = publisher
     yield
