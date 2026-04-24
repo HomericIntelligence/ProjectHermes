@@ -1,0 +1,12 @@
+.git
+.pixi
+__pycache__
+*.pyc
+.pytest_cache
+htmlcov
+.coverage
+tests/
+.env
+.worktrees/
+.issue_implementer/
+*.log

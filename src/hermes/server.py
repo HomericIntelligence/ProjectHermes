@@ -133,27 +133,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     _log_startup_banner(publisher, settings)
     app.state.publisher = publisher
-    yield
+    try:
+        yield
+    finally:
+        # Drain in-flight requests before disconnecting NATS
+        deadline = settings.shutdown_timeout
+        poll_interval = 0.05
+        elapsed = 0.0
+        logger.info("Shutdown: waiting up to %.1fs for in-flight requests to complete", deadline)
+        while elapsed < deadline:
+            async with _inflight_lock:
+                remaining = _inflight
+            if remaining == 0:
+                break
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        else:
+            logger.warning("Shutdown: timed out waiting for in-flight requests; proceeding")
 
-    # Drain in-flight requests before disconnecting NATS
-    deadline = settings.shutdown_timeout
-    poll_interval = 0.05
-    elapsed = 0.0
-    logger.info(
-        "Shutdown: waiting up to %.1fs for in-flight requests to complete", deadline
-    )
-    while elapsed < deadline:
-        async with _inflight_lock:
-            remaining = _inflight
-        if remaining == 0:
-            break
-        await asyncio.sleep(poll_interval)
-        elapsed += poll_interval
-    else:
-        logger.warning("Shutdown: timed out waiting for in-flight requests; proceeding")
-
-    logger.info("Shutdown: draining NATS connection")
-    await publisher.disconnect()
+        logger.info("Shutdown: draining NATS connection")
+        await publisher.disconnect()
 
 
 # ---------------------------------------------------------------------------
