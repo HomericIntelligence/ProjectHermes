@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac as hmac_mod
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -233,6 +234,37 @@ class TestWebhookEndpoint:
         assert response.status_code == 401
         after = REGISTRY.get_sample_value("hermes_webhooks_failed_total", labels) or 0.0
         assert after > before
+
+    def test_webhook_publish_timeout_returns_503(self) -> None:
+        from hermes.server import app
+        from hermes.publisher import Publisher
+
+        mock_publisher = MagicMock(spec=Publisher)
+        mock_publisher.is_connected = True
+        mock_publisher.active_subjects = []
+        mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
+        app.state.publisher = mock_publisher
+
+        from hermes.config import settings
+        settings.webhook_secret = _TEST_SECRET
+
+        client = TestClient(app, raise_server_exceptions=False)
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "h", "name": "n"},
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code == 503
+        assert "timed out" in response.json()["detail"].lower()
 
 
 class TestSignatureValidation:

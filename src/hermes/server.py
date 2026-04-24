@@ -311,15 +311,13 @@ async def receive_webhook(
         )
 
     try:
-        await asyncio.wait_for(
-            publisher.publish(
-                payload,
-                publish_timeout=settings.nats_publish_timeout,
-                request_id=request_id,
-            ),
-            timeout=settings.nats_publish_timeout,
+        await publisher.publish(
+            payload,
+            publish_timeout=settings.nats_publish_timeout,
+            request_id=request_id,
         )
     except asyncio.TimeoutError:
+        WEBHOOKS_FAILED.labels(reason="publish_timeout").inc()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="NATS publish timed out",
