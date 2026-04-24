@@ -352,10 +352,14 @@ async def receive_webhook(
     response_model=SubjectsResponse,
 )
 @limiter.limit("60/minute")
-async def list_subjects(request: Request) -> SubjectsResponse:
+async def list_subjects(request: Request, settings: SettingsDep) -> SubjectsResponse:
     """Return the list of NATS subjects that have been published to."""
     publisher: Publisher = app.state.publisher
-    return SubjectsResponse(subjects=publisher.active_subjects)
+    return SubjectsResponse(
+        subjects=publisher.active_subjects,
+        hermes_public_url=settings.hermes_public_url or "",
+        active_subjects_max=publisher.active_subjects_max,
+    )
 
 
 @app.get("/metrics")

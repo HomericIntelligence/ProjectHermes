@@ -116,6 +116,10 @@ class Publisher:
         return sorted(self._active_subjects)
 
     @property
+    def active_subjects_max(self) -> int:
+        return self._max_subjects
+
+    @property
     def stream_names(self) -> list[str]:
         return list(self._stream_names)
 

@@ -79,6 +79,8 @@ class SubjectsResponse(BaseModel):
     """Response body for GET /subjects."""
 
     subjects: list[str]
+    hermes_public_url: str = ""
+    active_subjects_max: int = 0
 
 
 class ErrorResponse(BaseModel):

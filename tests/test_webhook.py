@@ -30,6 +30,7 @@ def _build_client(*, connected: bool = True) -> TestClient:
     mock_publisher.is_connected = connected
     mock_publisher.active_subjects = []
     mock_publisher.dead_letter_count = 0
+    mock_publisher.active_subjects_max = 1000
     mock_publisher.publish = AsyncMock()
 
     # Inject the mock before the test client starts
@@ -768,6 +769,19 @@ class TestSubjectsEndpoint:
             client.get("/subjects")
         resp = client.get("/subjects")
         assert resp.status_code == 429
+
+    def test_subjects_includes_hermes_public_url(self) -> None:
+        client = _build_client()
+        body = client.get("/subjects").json()
+        assert "hermes_public_url" in body
+        assert isinstance(body["hermes_public_url"], str)
+
+    def test_subjects_includes_active_subjects_max(self) -> None:
+        client = _build_client()
+        body = client.get("/subjects").json()
+        assert "active_subjects_max" in body
+        assert isinstance(body["active_subjects_max"], int)
+        assert body["active_subjects_max"] > 0
 
 
 class TestWWWAuthenticate:
