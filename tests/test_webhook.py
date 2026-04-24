@@ -648,3 +648,41 @@ class TestVersionEndpoint:
         assert "version" in data
         assert isinstance(data["version"], str)
         assert len(data["version"]) > 0
+
+
+class TestTimestampValidation:
+    def test_webhook_naive_timestamp_rejected(self) -> None:
+        client = _build_client()
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "h", "name": "n"},
+            "timestamp": "2026-01-01T00:00:00",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code == 422
+
+    def test_webhook_aware_timestamp_accepted(self) -> None:
+        client = _build_client()
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "h", "name": "n"},
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code in (202, 500)

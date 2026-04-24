@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class HermesEventBase(BaseModel):
@@ -16,6 +16,13 @@ class HermesEventBase(BaseModel):
     schema_version: int = Field(default=1, ge=1, description="Wire format schema version")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @field_validator("timestamp")
+    @classmethod
+    def require_timezone(cls, v: datetime) -> datetime:
+        if v.tzinfo is None:
+            raise ValueError("timestamp must be timezone-aware")
+        return v
+
 
 class WebhookPayload(BaseModel):
     """Incoming webhook payload from an external service (inbound DTO)."""
@@ -24,6 +31,14 @@ class WebhookPayload(BaseModel):
     data: dict[str, Any]
     timestamp: datetime
     signature: str | None = None
+
+    @field_validator("timestamp")
+    @classmethod
+    def require_timezone(cls, v: datetime) -> datetime:
+        """Reject naive (timezone-unaware) timestamps at the boundary."""
+        if v.tzinfo is None:
+            raise ValueError("timestamp must be timezone-aware")
+        return v
 
 
 # ---------------------------------------------------------------------------
