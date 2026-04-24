@@ -14,6 +14,13 @@ from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
 
 
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 def _nats_url() -> str:
     return os.environ.get("TEST_NATS_URL", "nats://localhost:4222")
 

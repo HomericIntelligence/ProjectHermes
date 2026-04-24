@@ -21,7 +21,8 @@ def _sign(body: bytes) -> str:
 
 
 def _build_client(*, connected: bool = True) -> TestClient:
-    """Build a TestClient with a mocked Publisher."""
+    """Build a TestClient with a mocked Publisher and a known webhook secret."""
+    from hermes.config import get_settings
     from hermes.publisher import Publisher
     from hermes.server import app
 
@@ -33,6 +34,8 @@ def _build_client(*, connected: bool = True) -> TestClient:
 
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
+    # Set a known secret on the live cached Settings instance
+    get_settings().webhook_secret = _TEST_SECRET
     return TestClient(app, raise_server_exceptions=True)
 
 
