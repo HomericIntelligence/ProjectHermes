@@ -298,7 +298,9 @@ class TestEdgeCases:
     async def test_unknown_event_type_not_published(
         self, nats_url: str, nats_client: nats.aio.client.Client
     ) -> None:
-        """Unknown event types with dead-letter disabled are dropped — no NATS message."""
+        """Unknown event types with dead-letter disabled raise UnknownEventTypeError — no NATS message."""
+        from hermes.publisher import UnknownEventTypeError
+
         received: list[nats.aio.msg.Msg] = []
 
         async def _cb(m: nats.aio.msg.Msg) -> None:
@@ -314,8 +316,8 @@ class TestEdgeCases:
                 data={"foo": "bar"},
                 timestamp="2026-04-22T00:00:00Z",
             )
-            await pub.publish(payload)
-            await asyncio.sleep(0.1)
+            with pytest.raises(UnknownEventTypeError):
+                await pub.publish(payload)
         finally:
             await pub.disconnect()
 
