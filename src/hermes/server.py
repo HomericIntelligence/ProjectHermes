@@ -28,7 +28,7 @@ from hermes.models import (
     WebhookAcceptedResponse,
     WebhookPayload,
 )
-from hermes.publisher import Publisher
+from hermes.publisher import AGENT_EVENTS, TASK_EVENTS, Publisher
 
 logger = logging.getLogger(__name__)
 
@@ -298,6 +298,18 @@ async def dead_letters() -> dict[str, list[dict[str, Any]]]:
     """Return the in-memory dead-letter queue of unroutable webhook events."""
     publisher: Publisher = app.state.publisher
     return {"dead_letters": publisher.dead_letters}
+
+
+@app.get("/events")
+async def list_events() -> dict[str, list[str]]:
+    """Return the canonical set of supported webhook event types."""
+    agent = sorted(AGENT_EVENTS)
+    task = sorted(TASK_EVENTS)
+    return {
+        "agent_events": agent,
+        "task_events": task,
+        "all_events": sorted(AGENT_EVENTS | TASK_EVENTS),
+    }
 
 
 # ---------------------------------------------------------------------------
