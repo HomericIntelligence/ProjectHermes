@@ -46,6 +46,7 @@ class HealthResponse(BaseModel):
 
     status: str
     nats_connected: bool
+    shutting_down: bool = False
 
 
 class WebhookAcceptedResponse(BaseModel):

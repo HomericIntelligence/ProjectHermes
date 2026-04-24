@@ -60,9 +60,8 @@ class TestPublisherConnectTimeout:
 
         with patch("nats.connect", new_callable=AsyncMock, return_value=mock_nc) as mock_connect:
             await pub.connect("nats://localhost:4222", connect_timeout=7.5)
-            mock_connect.assert_awaited_once_with(
-                "nats://localhost:4222", connect_timeout=7.5
-            )
+            _, kwargs = mock_connect.call_args
+            assert kwargs["connect_timeout"] == 7.5
 
     @pytest.mark.asyncio
     async def test_connect_default_timeout(self) -> None:

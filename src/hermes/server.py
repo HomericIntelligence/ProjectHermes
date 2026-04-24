@@ -6,12 +6,14 @@ import asyncio
 import hashlib
 import hmac
 import logging
+import signal
 import sys
 import uuid
 from contextlib import asynccontextmanager
 from typing import Annotated, AsyncGenerator
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from hermes import __version__
@@ -27,6 +29,14 @@ from hermes.publisher import Publisher
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Shutdown state — module-level so tests can inspect/mutate directly
+# ---------------------------------------------------------------------------
+
+_shutdown_event: asyncio.Event = asyncio.Event()
+_inflight: int = 0
+_inflight_lock: asyncio.Lock = asyncio.Lock()
+
 _NATS_CONNECT_TIMEOUT = 5
 _NATS_RETRY_ATTEMPTS = 3
 _NATS_RETRY_INTERVAL = 5
@@ -38,9 +48,17 @@ _REQUEST_ID_HEADER = "X-Request-ID"
 # ---------------------------------------------------------------------------
 
 
+def _on_shutdown_signal(sig: signal.Signals) -> None:
+    """Set the module-level shutdown event when a termination signal arrives."""
+    logger.info("Received signal %s; initiating graceful shutdown", sig.name)
+    _shutdown_event.set()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Connect to NATS on startup with retries; abort startup if all attempts fail."""
+    global _shutdown_event, _inflight
+
     settings = get_settings()
     publisher = Publisher(enable_dead_letter=settings.enable_dead_letter)
     last_exc: Exception | None = None
@@ -73,10 +91,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         raise last_exc
 
+    # Install signal handlers so SIGTERM/SIGINT trigger graceful shutdown
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, _on_shutdown_signal, sig)
+
+    _shutdown_event = asyncio.Event()
+    _inflight = 0
+
     _log_startup_banner(publisher, settings)
     app.state.publisher = publisher
     yield
-    await publisher.disconnect()
+
+    # Drain in-flight requests before disconnecting NATS
+    deadline = settings.shutdown_timeout
+    poll_interval = 0.05
+    elapsed = 0.0
+    logger.info("Shutdown: waiting up to %.1fs for in-flight requests to complete", deadline)
+    while elapsed < deadline:
+        async with _inflight_lock:
+            remaining = _inflight
+        if remaining == 0:
+            break
+        await asyncio.sleep(poll_interval)
+        elapsed += poll_interval
+    else:
+        logger.warning("Shutdown: timed out waiting for in-flight requests; proceeding")
+
+    logger.info("Shutdown: draining NATS connection")
+    await publisher.disconnect(drain_timeout=settings.shutdown_timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +162,24 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class ShutdownMiddleware(BaseHTTPMiddleware):
+    """Reject /webhook with 503 once shutdown has been signalled.
+
+    All other paths (e.g. /health) pass through so load balancers can observe
+    the shutting_down flag before removing the instance from rotation.
+    """
+
+    async def dispatch(self, request: Request, call_next: object) -> Response:
+        if _shutdown_event.is_set() and request.url.path == "/webhook":
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"detail": "Service is shutting down"},
+            )
+        response: Response = await call_next(request)  # type: ignore[operator]
+        return response
+
+
+app.add_middleware(ShutdownMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
 
@@ -135,7 +196,11 @@ app.add_middleware(RequestIDMiddleware)
 async def health() -> HealthResponse:
     """Return service health and NATS connection status."""
     publisher: Publisher = app.state.publisher
-    return HealthResponse(status="ok", nats_connected=publisher.is_connected)
+    return HealthResponse(
+        status="ok",
+        nats_connected=publisher.is_connected,
+        shutting_down=_shutdown_event.is_set(),
+    )
 
 
 @app.post(

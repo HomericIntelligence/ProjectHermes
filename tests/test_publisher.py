@@ -183,7 +183,7 @@ class TestPublisherLifecycle:
 
     async def test_publish_unknown_event_is_dropped(self) -> None:
         mock_js = AsyncMock()
-        pub = Publisher()
+        pub = Publisher(enable_dead_letter=False)
         pub._js = mock_js
 
         payload = WebhookPayload(
@@ -227,7 +227,7 @@ class TestPublisherLifecycle:
         with patch("hermes.publisher.nats.connect", AsyncMock(return_value=mock_nc)):
             pub = Publisher()
             await pub.connect("nats://localhost:4222")
-            assert mock_jsm.add_stream.await_count == 2  # agents + tasks
+            assert mock_jsm.add_stream.await_count == 3  # agents + tasks + deadletter
 
 
 class TestDeadLetterRouting:

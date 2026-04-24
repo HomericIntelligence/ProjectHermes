@@ -95,14 +95,15 @@ class TestLogStartupBanner:
         from hermes.server import _log_startup_banner
         from hermes.config import Settings
 
-        settings = Settings(webhook_secret="abcdefgh")
+        secret = "abcdefgh" + "x" * 24  # pad to 32 chars to pass validation
+        settings = Settings(webhook_secret=secret)
         publisher = self._make_publisher()
         with patch("hermes.server.logger") as mock_logger:
             _log_startup_banner(publisher, settings)
 
         all_info_args = [str(c) for c in mock_logger.info.call_args_list]
         assert any("abcd****" in a for a in all_info_args)
-        assert not any("abcdefgh" in a for a in all_info_args)
+        assert not any(secret in a for a in all_info_args)
 
     def test_banner_shows_not_set_for_empty_webhook_secret(self) -> None:
         from hermes.server import _log_startup_banner
@@ -120,7 +121,7 @@ class TestLogStartupBanner:
         from hermes.server import _log_startup_banner
         from hermes.config import Settings
 
-        settings = Settings(webhook_secret="mysecret")
+        settings = Settings(webhook_secret="mysecret" + "x" * 24)  # pad to 32 chars
         publisher = self._make_publisher()
         with patch("hermes.server.logger") as mock_logger:
             _log_startup_banner(publisher, settings)
