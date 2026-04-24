@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hermes.models import HealthResponse, SubjectsResponse, WebhookAcceptedResponse
 
-# Fixed secret used across all webhook tests
-_TEST_SECRET = "test-webhook-secret"
+# Fixed secret used across all webhook tests — must be ≥32 chars (enforced by Settings)
+_TEST_SECRET = "test-webhook-secret-padding-xxxxx"
 
 
 def _sign(body: bytes) -> str:

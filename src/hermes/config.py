@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     nats_connect_timeout: float = 5.0
     nats_publish_timeout: float = 5.0
     agamemnon_timeout: float = 10.0
+    shutdown_timeout: float = 10.0
     enable_dead_letter: bool = True
 
     @field_validator("webhook_secret")
