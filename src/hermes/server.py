@@ -25,6 +25,7 @@ from hermes.models import (
     ErrorResponse,
     HealthResponse,
     SubjectsResponse,
+    VersionResponse,
     WebhookAcceptedResponse,
     WebhookPayload,
 )
@@ -217,6 +218,12 @@ async def health(response: Response) -> HealthResponse:
         hmac_validation_enabled=bool(cfg.webhook_secret),
         hermes_public_url=cfg.hermes_public_url,
     )
+
+
+@app.get("/version", response_model=VersionResponse)
+async def get_version() -> VersionResponse:
+    """Return the installed package version."""
+    return VersionResponse(version=__version__)
 
 
 @app.get("/ready", responses={503: {"model": ErrorResponse, "description": "NATS not connected"}})

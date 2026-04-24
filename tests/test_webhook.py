@@ -217,3 +217,17 @@ class TestSubjectsEndpoint:
         body = client.get("/subjects").json()
         assert "subjects" in body
         assert isinstance(body["subjects"], list)
+
+
+class TestVersionEndpoint:
+    def test_version_returns_200(self) -> None:
+        client = _build_client()
+        resp = client.get("/version")
+        assert resp.status_code == 200
+
+    def test_version_body_has_version_key(self) -> None:
+        client = _build_client()
+        data = client.get("/version").json()
+        assert "version" in data
+        assert isinstance(data["version"], str)
+        assert len(data["version"]) > 0
