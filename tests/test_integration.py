@@ -23,7 +23,7 @@ from hermes.publisher import Publisher
 pytestmark = pytest.mark.integration
 
 _NATS_URL = os.environ.get("TEST_NATS_URL", "nats://localhost:4222")
-_TEST_SECRET = "integration-test-secret"
+_TEST_SECRET = "integration-test-secret-for-hermes-webhook"
 
 
 def _sign(body: bytes) -> str:
@@ -170,14 +170,13 @@ class TestPublisherIntegration:
 
 class TestWebhookIntegration:
     async def test_webhook_to_nats_end_to_end(
-        self, nats_url: str, nats_client: nats.aio.client.Client
+        self, monkeypatch: pytest.MonkeyPatch, nats_url: str, nats_client: nats.aio.client.Client
     ) -> None:
         """POST /webhook with a valid payload results in a NATS message being delivered."""
-        from hermes.config import settings
         from hermes.server import app
 
-        settings.webhook_secret = _TEST_SECRET
-        settings.nats_url = nats_url
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("NATS_URL", nats_url)
 
         received: list[nats.aio.msg.Msg] = []
 
@@ -219,12 +218,13 @@ class TestWebhookIntegration:
             await sub.unsubscribe()
             await pub.disconnect()
 
-    async def test_webhook_nats_disconnected_returns_503(self) -> None:
+    async def test_webhook_nats_disconnected_returns_503(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """POST /webhook returns 503 when the publisher is not connected."""
-        from hermes.config import settings
         from hermes.server import app
 
-        settings.webhook_secret = _TEST_SECRET
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
 
         disconnected = Publisher()  # never connected
         app.state.publisher = disconnected
@@ -256,13 +256,14 @@ class TestWebhookIntegration:
 
 
 class TestLifespan:
-    async def test_lifespan_connects_publisher(self, nats_url: str) -> None:
+    async def test_lifespan_connects_publisher(
+        self, monkeypatch: pytest.MonkeyPatch, nats_url: str
+    ) -> None:
         """The lifespan context manager connects the publisher on startup."""
-        from hermes.config import settings
         from hermes.server import lifespan
         from fastapi import FastAPI
 
-        settings.nats_url = nats_url
+        monkeypatch.setenv("NATS_URL", nats_url)
         test_app = FastAPI()
 
         async with lifespan(test_app):
@@ -270,13 +271,14 @@ class TestLifespan:
 
         assert not test_app.state.publisher.is_connected
 
-    async def test_lifespan_handles_nats_unavailable(self) -> None:
+    async def test_lifespan_handles_nats_unavailable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Lifespan raises when NATS is unreachable after all retry attempts."""
-        from hermes.config import settings
         from hermes.server import lifespan
         from fastapi import FastAPI
 
-        settings.nats_url = "nats://127.0.0.1:19999"  # nothing listening here
+        monkeypatch.setenv("NATS_URL", "nats://127.0.0.1:19999")  # nothing listening here
         test_app = FastAPI()
 
         with pytest.raises(Exception):
