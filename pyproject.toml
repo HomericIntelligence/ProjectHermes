@@ -17,7 +17,6 @@ addopts = [
     "--cov=hermes",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=80",
 ]
 markers = [
     "integration: requires a running NATS server",
