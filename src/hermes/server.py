@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import hmac
 import logging
+import re
 import signal
 import uuid
 from collections.abc import AsyncGenerator
@@ -47,6 +48,7 @@ _NATS_RETRY_ATTEMPTS = 3
 _NATS_RETRY_INTERVAL = 5
 
 _REQUEST_ID_HEADER = "X-Request-ID"
+_REQUEST_ID_RE = re.compile(r"^[a-zA-Z0-9\-_]{1,128}$")
 
 # ---------------------------------------------------------------------------
 # Application lifespan
@@ -170,7 +172,8 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
-        request_id = request.headers.get(_REQUEST_ID_HEADER) or str(uuid.uuid4())
+        raw_id = request.headers.get(_REQUEST_ID_HEADER, "")
+        request_id = raw_id if _REQUEST_ID_RE.match(raw_id) else str(uuid.uuid4())
         request.state.request_id = request_id
         response: Response = await call_next(request)  # type: ignore[operator]
         response.headers[_REQUEST_ID_HEADER] = request_id

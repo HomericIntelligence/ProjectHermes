@@ -193,6 +193,131 @@ class TestWebhookEndpoint:
         assert response.status_code == 401
 
 
+class TestSignatureValidation:
+    """Tests for _verify_signature behaviour (issue #156)."""
+
+    def test_missing_signature_header_returns_401_when_secret_configured(self) -> None:
+        client = _build_client()
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        response = client.post("/webhook", json=payload)
+        assert response.status_code == 401
+
+    def test_empty_signature_header_returns_401_when_secret_configured(self) -> None:
+        client = _build_client()
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={"Content-Type": "application/json", "X-Webhook-Signature": ""},
+        )
+        assert response.status_code == 401
+
+
+class TestRequestIDMiddleware:
+    """Tests for X-Request-ID header sanitization (issue #229)."""
+
+    def test_valid_uuid_request_id_is_passed_through(self) -> None:
+        import uuid as uuid_mod
+
+        client = _build_client()
+        valid_id = str(uuid_mod.uuid4())
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Request-ID": valid_id,
+            },
+        )
+        assert response.headers.get("X-Request-ID") == valid_id
+
+    def test_invalid_chars_in_request_id_are_replaced_with_uuid(self) -> None:
+        import uuid as uuid_mod
+
+        client = _build_client()
+        invalid_id = "bad<>id\ninjection"
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Request-ID": invalid_id,
+            },
+        )
+        returned_id = response.headers.get("X-Request-ID")
+        assert returned_id != invalid_id
+        uuid_mod.UUID(returned_id)  # raises ValueError if not a valid UUID
+
+    def test_absent_request_id_header_generates_uuid(self) -> None:
+        import uuid as uuid_mod
+
+        client = _build_client()
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        returned_id = response.headers.get("X-Request-ID")
+        assert returned_id is not None
+        uuid_mod.UUID(returned_id)  # raises ValueError if not a valid UUID
+
+    def test_oversized_request_id_is_replaced_with_uuid(self) -> None:
+        import uuid as uuid_mod
+
+        client = _build_client()
+        oversized_id = "a" * 129
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Request-ID": oversized_id,
+            },
+        )
+        returned_id = response.headers.get("X-Request-ID")
+        assert returned_id != oversized_id
+        uuid_mod.UUID(returned_id)  # raises ValueError if not a valid UUID
+
+
 class TestSettings:
     def test_hermes_host_defaults_to_localhost(self) -> None:
         from hermes.config import Settings
