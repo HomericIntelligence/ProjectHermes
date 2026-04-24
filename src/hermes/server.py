@@ -111,7 +111,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if not settings.webhook_secret:
         logger.warning(
-            "HMAC webhook validation is DISABLED — set WEBHOOK_SECRET to enable signature verification"
+            "HMAC webhook validation is DISABLED — set WEBHOOK_SECRET to enable signature verification",
+            extra={"hmac_enabled": False},
         )
 
     if settings.hermes_host == "0.0.0.0":
@@ -390,6 +391,7 @@ def _verify_signature(body: bytes, provided: str, settings: Settings) -> None:
         hashlib.sha256,
     ).hexdigest()
     if not hmac.compare_digest(expected, provided):
+        WEBHOOKS_FAILED.labels(reason="invalid_signature").inc()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid webhook signature",

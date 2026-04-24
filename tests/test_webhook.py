@@ -199,6 +199,30 @@ class TestWebhookEndpoint:
         )
         assert response.status_code == 401
 
+    def test_invalid_signature_increments_failed_counter(self) -> None:
+        from prometheus_client import REGISTRY
+
+        client = _build_client()
+        labels = {"reason": "invalid_signature"}
+        before = REGISTRY.get_sample_value("hermes_webhooks_failed_total", labels) or 0.0
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": "sha256=wrong",
+            },
+        )
+        assert response.status_code == 401
+        after = REGISTRY.get_sample_value("hermes_webhooks_failed_total", labels) or 0.0
+        assert after > before
+
 
 class TestSignatureValidation:
     """Tests for _verify_signature behaviour (issue #156)."""
