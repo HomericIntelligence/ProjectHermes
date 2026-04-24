@@ -77,6 +77,13 @@ class TestHealthEndpoint:
         body = client.get("/health").json()
         assert body["nats_connected"] is False
 
+    def test_health_includes_inflight_requests(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "inflight_requests" in body
+        assert isinstance(body["inflight_requests"], int)
+        assert body["inflight_requests"] >= 0
+
 
 class TestReadyEndpoint:
     def test_ready_returns_200_when_connected(self) -> None:

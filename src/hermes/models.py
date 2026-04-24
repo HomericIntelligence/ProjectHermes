@@ -59,6 +59,7 @@ class HealthResponse(BaseModel):
     shutting_down: bool = False
     hmac_validation_enabled: bool = False
     hermes_public_url: str | None = None
+    inflight_requests: int = 0
 
 
 class WebhookAcceptedResponse(BaseModel):
