@@ -331,7 +331,8 @@ async def receive_webhook(
     "/subjects",
     response_model=SubjectsResponse,
 )
-async def list_subjects() -> SubjectsResponse:
+@limiter.limit("60/minute")
+async def list_subjects(request: Request) -> SubjectsResponse:
     """Return the list of NATS subjects that have been published to."""
     publisher: Publisher = app.state.publisher
     return SubjectsResponse(subjects=publisher.active_subjects)
@@ -414,6 +415,7 @@ def _verify_signature(body: bytes, provided: str, settings: Settings) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid webhook signature",
+            headers={"WWW-Authenticate": 'Bearer realm="hermes"'},
         )
 
 

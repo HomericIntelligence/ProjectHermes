@@ -442,6 +442,42 @@ class TestSubjectsEndpoint:
         assert "subjects" in body
         assert isinstance(body["subjects"], list)
 
+    def test_subjects_rate_limit_returns_429_when_limit_exceeded(self) -> None:
+        from hermes.rate_limit import limiter
+
+        limiter._storage.reset()  # type: ignore[attr-defined]
+        client = _build_client()
+        for _ in range(60):
+            client.get("/subjects")
+        resp = client.get("/subjects")
+        assert resp.status_code == 429
+
+
+class TestWWWAuthenticate:
+    def test_bad_signature_401_has_www_authenticate_header(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        client = _build_client()
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        resp = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": "sha256=bad",
+            },
+        )
+        assert resp.status_code == 401
+        headers_lower = {k.lower(): v for k, v in resp.headers.items()}
+        assert "www-authenticate" in headers_lower
+        assert headers_lower["www-authenticate"] == 'Bearer realm="hermes"'
+
 
 class TestVersionEndpoint:
     def test_version_returns_200(self) -> None:
