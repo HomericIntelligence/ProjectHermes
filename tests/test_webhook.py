@@ -24,6 +24,7 @@ def _build_client(*, connected: bool = True) -> TestClient:
     """Build a TestClient with a mocked Publisher and a known webhook secret."""
     from hermes.config import get_settings
     from hermes.publisher import Publisher
+    from hermes.rate_limit import limiter
     from hermes.server import app
 
     mock_publisher = MagicMock(spec=Publisher)
@@ -37,6 +38,8 @@ def _build_client(*, connected: bool = True) -> TestClient:
     app.state.publisher = mock_publisher
     # Set a known secret on the live cached Settings instance
     get_settings().webhook_secret = _TEST_SECRET
+    # Reset rate limiter so each test starts with a clean slate
+    limiter._storage.reset()  # type: ignore[attr-defined]
     return TestClient(app, raise_server_exceptions=True)
 
 
