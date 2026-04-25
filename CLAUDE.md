@@ -39,6 +39,25 @@ Values that exceed 64 characters are silently truncated before routing.
 
 Unknown event types are routed to the `homeric-deadletter` NATS stream for inspection and replay.
 
+## Wire Format and schema_version
+
+Every message published to NATS JetStream includes a `schema_version` integer field (from
+`HermesEventBase` in `src/hermes/models.py`).  The current version is **1**.
+
+| Field            | Type | Current value | Description                              |
+|------------------|------|---------------|------------------------------------------|
+| `schema_version` | int  | 1             | Wire format version; increments on breaking changes |
+
+**Consumer guidance:**
+
+- Always read `schema_version` before deserializing the `data` payload.
+- If `schema_version > 1`, treat the message as a newer format your consumer may not understand;
+  log a warning and skip (or route to a dead-letter queue) rather than crashing.
+- `schema_version` will only be incremented on **breaking** changes to the wire format.  Additive
+  changes (new optional fields) are backwards-compatible and do not require a version bump.
+- There is no automated migration; consumers must handle old and new versions side-by-side during
+  rolling deployments.
+
 ## Configuration
 
 | Variable              | Default                        | Description                                             |
@@ -56,6 +75,11 @@ Unknown event types are routed to the `homeric-deadletter` NATS stream for inspe
 | SHUTDOWN_TIMEOUT      | 10.0                           | Graceful shutdown timeout in seconds                    |
 
 Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webhook`.
+
+> **Security warning:** Setting `TLS_VERIFY=false` disables TLS certificate verification and MUST
+> NOT be used in production.  When `TLS_VERIFY=false` is combined with `HERMES_HOST=0.0.0.0`
+> (production binding), Hermes logs a loud `WARNING` at startup.  Always use a valid CA bundle
+> (`TLS_CA_BUNDLE`) in production instead of disabling verification.
 
 ## Key Principles
 
