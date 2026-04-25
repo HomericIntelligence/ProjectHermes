@@ -1008,6 +1008,7 @@ class TestStartupBanner:
         self, monkeypatch: pytest.MonkeyPatch, nats_url: str, caplog: pytest.LogCaptureFixture
     ) -> None:
         """lifespan emits version, config, and NATS connectivity banner lines."""
+        from unittest.mock import patch
         from hermes.server import lifespan
         from fastapi import FastAPI
 
@@ -1015,7 +1016,11 @@ class TestStartupBanner:
 
         test_app = FastAPI()
 
-        with caplog.at_level(logging.INFO, logger="hermes.server"):
+        # Patch setup_logging to prevent it from replacing pytest's caplog handler
+        with (
+            caplog.at_level(logging.INFO),
+            patch("hermes.server.setup_logging"),
+        ):
             async with lifespan(test_app):
                 pass  # startup complete; banner already logged
 
