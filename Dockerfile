@@ -12,6 +12,7 @@ COPY src/hermes/ ./hermes/
 RUN useradd -r -s /usr/sbin/nologin hermes
 USER hermes
 
+ENV HERMES_HOST=0.0.0.0
 ENV HERMES_PORT=8080
 ENV HERMES_PUBLIC_URL=http://localhost:8080
 EXPOSE 8080
