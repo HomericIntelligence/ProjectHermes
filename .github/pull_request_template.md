@@ -17,6 +17,7 @@
 - [ ] Lint clean (`just lint`)
 - [ ] Types checked (all new functions have type hints)
 - [ ] Documentation updated (if user-facing change)
+- [ ] Updated CHANGELOG.md
 - [ ] No secrets or credentials committed
 
 ## Related Issues

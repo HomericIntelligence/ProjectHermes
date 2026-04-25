@@ -827,6 +827,58 @@ class TestVersionEndpoint:
         assert len(data["version"]) > 0
 
 
+class TestEventsEndpoint:
+    """Tests for GET /events — validates response against AGENT_EVENTS and TASK_EVENTS (#127)."""
+
+    def test_events_returns_200(self) -> None:
+        client = _build_client()
+        resp = client.get("/events")
+        assert resp.status_code == 200
+
+    def test_events_response_has_agent_events_key(self) -> None:
+        client = _build_client()
+        body = client.get("/events").json()
+        assert "agent_events" in body
+
+    def test_events_response_has_task_events_key(self) -> None:
+        client = _build_client()
+        body = client.get("/events").json()
+        assert "task_events" in body
+
+    def test_events_response_has_all_events_key(self) -> None:
+        client = _build_client()
+        body = client.get("/events").json()
+        assert "all_events" in body
+
+    def test_events_agent_events_matches_publisher_constant(self) -> None:
+        from hermes.publisher import AGENT_EVENTS
+
+        client = _build_client()
+        body = client.get("/events").json()
+        assert set(body["agent_events"]) == AGENT_EVENTS
+
+    def test_events_task_events_matches_publisher_constant(self) -> None:
+        from hermes.publisher import TASK_EVENTS
+
+        client = _build_client()
+        body = client.get("/events").json()
+        assert set(body["task_events"]) == TASK_EVENTS
+
+    def test_events_all_events_is_union_of_agent_and_task(self) -> None:
+        from hermes.publisher import AGENT_EVENTS, TASK_EVENTS
+
+        client = _build_client()
+        body = client.get("/events").json()
+        assert set(body["all_events"]) == AGENT_EVENTS | TASK_EVENTS
+
+    def test_events_lists_are_sorted(self) -> None:
+        client = _build_client()
+        body = client.get("/events").json()
+        assert body["agent_events"] == sorted(body["agent_events"])
+        assert body["task_events"] == sorted(body["task_events"])
+        assert body["all_events"] == sorted(body["all_events"])
+
+
 class TestTimestampValidation:
     def test_webhook_naive_timestamp_rejected(self) -> None:
         client = _build_client()

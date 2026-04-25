@@ -2,6 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
+from hermes.config import get_settings
 from hermes.models import HermesEventBase
 
 try:
@@ -9,4 +10,4 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-__all__ = ["HermesEventBase", "__version__"]
+__all__ = ["HermesEventBase", "__version__", "get_settings"]
