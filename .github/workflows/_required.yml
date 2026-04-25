@@ -74,7 +74,7 @@ jobs:
           TEST_NATS_URL: nats://localhost:4222
         run: pixi run pytest -m integration -v
 
-  security/dependency-scan:
+  security-dependency-scan:
     name: security/dependency-scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -89,7 +89,7 @@ jobs:
       - name: Dependency scan (pip-audit)
         run: pixi run pip-audit >> $GITHUB_STEP_SUMMARY
 
-  security/secrets-scan:
+  security-secrets-scan:
     name: security/secrets-scan
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -158,7 +158,7 @@ jobs:
             xargs check-jsonschema \
               --schemafile https://json.schemastore.org/github-workflow
 
-  deps/version-sync:
+  deps-version-sync:
     name: deps/version-sync
     runs-on: ubuntu-latest
     timeout-minutes: 10
