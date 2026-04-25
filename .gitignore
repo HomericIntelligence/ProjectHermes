@@ -19,3 +19,9 @@ build/
 .ruff_cache/
 .pytest_cache/
 .pixi/
+
+# Session artifacts
+.worktrees/
+.issue_implementer/
+.coverage
+htmlcov/
