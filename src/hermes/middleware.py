@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """HTTP middleware for ProjectHermes."""
 
 from __future__ import annotations

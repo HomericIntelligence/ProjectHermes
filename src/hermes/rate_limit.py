@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Rate limiting for the /webhook endpoint using slowapi."""
 
 from __future__ import annotations

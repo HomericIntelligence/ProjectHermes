@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FastAPI application for ProjectHermes."""
 
 from __future__ import annotations

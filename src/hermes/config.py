@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Configuration for ProjectHermes, loaded from environment variables / .env file."""
 
 from __future__ import annotations

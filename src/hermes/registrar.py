@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Registrar module removed per ADR-006.
 
 Previously registered ProjectHermes as a webhook receiver with ai-maestro.

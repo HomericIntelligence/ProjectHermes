@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Entry point for ``python -m hermes``."""
 
 from __future__ import annotations

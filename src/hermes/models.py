@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Pydantic models for ProjectHermes webhook payloads and NATS events."""
 
 from __future__ import annotations

@@ -1,5 +1,16 @@
 # Security Policy
 
+## Supported Versions
+
+| Version | Supported          | Notes                                                     |
+|---------|--------------------|-----------------------------------------------------------|
+| main    | Yes                | Latest development version; receives all security fixes   |
+| 0.x     | Latest commit only | Pre-v1.0; only the latest commit on main is supported     |
+
+**Version Support Policy:**
+
+ProjectHermes is in active development (pre-v1.0). We recommend always running the latest commit from the `main` branch to receive the most up-to-date security fixes and improvements. Once we reach v1.0, we will provide a more detailed long-term support (LTS) policy.
+
 ## Reporting Security Vulnerabilities
 
 **Do not open public issues for security vulnerabilities.**
