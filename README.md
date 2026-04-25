@@ -69,6 +69,20 @@ hi.tasks.{team_id}.{task_id}.{event}
 
 Example: `hi.tasks.team-alpha.task-42.updated`
 
+## Wire Format and schema_version
+
+All NATS messages published by Hermes include a `schema_version` integer field.
+
+| Field            | Current value | Description                                        |
+|------------------|---------------|----------------------------------------------------|
+| `schema_version` | 1             | Wire format version; increments on breaking changes |
+
+**Consumer guidance:**
+- Check `schema_version` before deserializing the `data` payload.
+- If `schema_version` is higher than your consumer knows about, log a warning and skip or dead-letter the message rather than crashing.
+- Additive changes (new optional fields) are backwards-compatible and do not bump the version.
+- There is no automated migration; consumers must handle multiple versions side-by-side during rolling deployments.
+
 ## Endpoints
 
 Hermes exposes several endpoints for webhooks, health checks, and observability:
@@ -120,6 +134,8 @@ cp .env.example .env
 | TLS_VERIFY            | true             | Verify TLS certificates (set false only for dev/testing)    |
 
 > **Security:** If `WEBHOOK_SECRET` is empty, HMAC validation is **disabled** and a warning is logged at startup. Always set a secret in production.
+
+> **Security:** `TLS_VERIFY=false` disables TLS certificate verification and **must never be used in production**. When this option is set alongside `HERMES_HOST=0.0.0.0` (the production binding), Hermes logs a loud `WARNING` at startup. Use `TLS_CA_BUNDLE` to supply a trusted CA instead.
 
 ### NATS Reconnection
 

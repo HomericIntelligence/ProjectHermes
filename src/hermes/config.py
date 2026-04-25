@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import ssl
 from functools import lru_cache
@@ -11,6 +12,8 @@ from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_config_logger = logging.getLogger(__name__)
 
 _MIN_SECRET_LENGTH = 32
 _HOSTNAME_RE = re.compile(
@@ -102,6 +105,25 @@ class Settings(BaseSettings):
     tls_cert_file: str | None = None
     tls_key_file: str | None = None
     tls_verify: bool = True
+
+    @model_validator(mode="after")
+    def _warn_tls_verify_disabled(self) -> "Settings":
+        """Emit a loud WARNING when TLS verification is disabled in a production-like environment.
+
+        Production is inferred when ``hermes_host`` is ``0.0.0.0`` (listening on all interfaces),
+        which is the conventional deployment binding.  This is a defence-in-depth guard; the
+        authoritative production signal is the operator's configuration management.
+        """
+        if not self.tls_verify and self.hermes_host == "0.0.0.0":
+            _config_logger.warning(
+                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+                "  TLS_VERIFY=false IS SET WHILE HERMES_HOST=0.0.0.0 (PRODUCTION)\n"
+                "  TLS certificate verification is DISABLED — this is INSECURE and\n"
+                "  MUST NOT be used in production.  Set TLS_VERIFY=true or provide\n"
+                "  a valid CA bundle via TLS_CA_BUNDLE.\n"
+                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+            )
+        return self
 
     def build_ssl_context(self) -> ssl.SSLContext | None:
         """Return an SSLContext for NATS TLS connections, or None if TLS is not configured.

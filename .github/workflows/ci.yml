@@ -36,6 +36,9 @@ jobs:
       - name: Type check
         run: pixi run typecheck
 
+      - name: Dependency scan (pip-audit)
+        run: pixi run pip-audit
+
       - name: Unit tests (no NATS required)
         run: pixi run pytest -m "not integration" --cov-fail-under=80
 
