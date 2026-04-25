@@ -196,6 +196,7 @@ class Publisher:
 
         message = json.dumps(
             {
+                "schema_version": 1,
                 "event": payload.event,
                 "data": payload.data,
                 "timestamp": payload.timestamp.isoformat(),

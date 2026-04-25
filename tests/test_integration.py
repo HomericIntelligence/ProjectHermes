@@ -380,3 +380,258 @@ class TestEdgeCases:
         assert len(received) == 1
         body = json.loads(received[0].data)
         assert body["data"]["blob"] == "x" * 100_000
+
+
+# ---------------------------------------------------------------------------
+# Issue #66: _ensure_streams integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureStreams:
+    """Verify that _ensure_streams creates the expected JetStream streams."""
+
+    @pytest.mark.integration
+    async def test_ensure_streams_creates_agents_stream(self, nats_url: str) -> None:
+        """connect() creates the homeric-agents stream via _ensure_streams."""
+        pub = Publisher()
+        await pub.connect(nats_url)
+        try:
+            jsm = pub._nc.jsm()
+            info = await jsm.stream_info("homeric-agents")
+            assert info is not None
+            assert info.config.name == "homeric-agents"
+            assert "hi.agents.>" in info.config.subjects
+        finally:
+            await pub.disconnect()
+
+    @pytest.mark.integration
+    async def test_ensure_streams_creates_tasks_stream(self, nats_url: str) -> None:
+        """connect() creates the homeric-tasks stream via _ensure_streams."""
+        pub = Publisher()
+        await pub.connect(nats_url)
+        try:
+            jsm = pub._nc.jsm()
+            info = await jsm.stream_info("homeric-tasks")
+            assert info is not None
+            assert info.config.name == "homeric-tasks"
+            assert "hi.tasks.>" in info.config.subjects
+        finally:
+            await pub.disconnect()
+
+    @pytest.mark.integration
+    async def test_ensure_streams_is_idempotent(self, nats_url: str) -> None:
+        """Calling connect() twice does not raise — _ensure_streams is idempotent."""
+        pub1 = Publisher()
+        await pub1.connect(nats_url)
+        await pub1.disconnect()
+
+        pub2 = Publisher()
+        await pub2.connect(nats_url)
+        try:
+            jsm = pub2._nc.jsm()
+            agents_info = await jsm.stream_info("homeric-agents")
+            tasks_info = await jsm.stream_info("homeric-tasks")
+            assert agents_info is not None
+            assert tasks_info is not None
+        finally:
+            await pub2.disconnect()
+
+    @pytest.mark.integration
+    async def test_ensure_streams_populates_stream_names(self, nats_url: str) -> None:
+        """connect() populates publisher.stream_names with the created stream names."""
+        pub = Publisher()
+        await pub.connect(nats_url)
+        try:
+            assert "homeric-agents" in pub.stream_names
+            assert "homeric-tasks" in pub.stream_names
+        finally:
+            await pub.disconnect()
+
+
+# ---------------------------------------------------------------------------
+# Issue #82: /health and /ready integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestHealthAndReadyIntegration:
+    """Test /health and /ready endpoints with a real connected Publisher."""
+
+    @pytest.mark.integration
+    async def test_health_returns_200_when_nats_connected(self, nats_url: str) -> None:
+        """GET /health returns 200 and nats_connected: true when NATS is running."""
+        from hermes.server import app
+
+        pub = Publisher()
+        await pub.connect(nats_url)
+        app.state.publisher = pub
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.get("/health")
+            assert response.status_code == 200
+            body = response.json()
+            assert body["nats_connected"] is True
+            assert body["status"] == "ok"
+        finally:
+            await pub.disconnect()
+
+    @pytest.mark.integration
+    async def test_ready_returns_true_when_nats_connected(self, nats_url: str) -> None:
+        """GET /ready returns {"ready": true} when Publisher is connected."""
+        from hermes.server import app
+
+        pub = Publisher()
+        await pub.connect(nats_url)
+        app.state.publisher = pub
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.get("/ready")
+            assert response.status_code == 200
+            assert response.json() == {"ready": True}
+        finally:
+            await pub.disconnect()
+
+    @pytest.mark.integration
+    async def test_health_returns_503_when_nats_disconnected(self) -> None:
+        """GET /health returns 503 and nats_connected: false when Publisher is not connected."""
+        from hermes.server import app
+
+        disconnected_pub = Publisher()  # never connected
+        app.state.publisher = disconnected_pub
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/health")
+        assert response.status_code == 503
+        body = response.json()
+        assert body["nats_connected"] is False
+
+    @pytest.mark.integration
+    async def test_ready_returns_503_when_nats_disconnected(self) -> None:
+        """GET /ready returns 503 and ready: false when Publisher is not connected."""
+        from hermes.server import app
+
+        disconnected_pub = Publisher()  # never connected
+        app.state.publisher = disconnected_pub
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.get("/ready")
+        assert response.status_code == 503
+        body = response.json()
+        assert body["ready"] is False
+
+
+# ---------------------------------------------------------------------------
+# Issue #100: schema_version serialization integration test
+# ---------------------------------------------------------------------------
+
+
+class TestPublishSchemaVersion:
+    """Verify that published NATS messages include the schema_version field."""
+
+    @pytest.mark.integration
+    async def test_publish_includes_schema_version(
+        self, publisher: Publisher, nats_client: nats.aio.client.Client
+    ) -> None:
+        """publish() includes schema_version=1 in the serialized NATS message body."""
+        received: list[nats.aio.msg.Msg] = []
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.agents.schema-host.schema-agent.created", cb=_cb)
+
+        payload = WebhookPayload(
+            event="agent.created",
+            data={"host": "schema-host", "name": "schema-agent"},
+            timestamp="2026-04-22T00:00:00Z",
+        )
+        await publisher.publish(payload)
+        await asyncio.sleep(0.1)
+
+        await sub.unsubscribe()
+        assert len(received) == 1
+        body = json.loads(received[0].data)
+        assert "schema_version" in body, "schema_version field missing from published message"
+        assert body["schema_version"] == 1
+
+    @pytest.mark.integration
+    async def test_publish_schema_version_present_in_task_event(
+        self, publisher: Publisher, nats_client: nats.aio.client.Client
+    ) -> None:
+        """schema_version is included in task event messages as well."""
+        received: list[nats.aio.msg.Msg] = []
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.tasks.team-sv.task-sv.updated", cb=_cb)
+
+        payload = WebhookPayload(
+            event="task.updated",
+            data={"teamId": "team-sv", "task_id": "task-sv"},
+            timestamp="2026-04-22T00:00:00Z",
+        )
+        await publisher.publish(payload)
+        await asyncio.sleep(0.1)
+
+        await sub.unsubscribe()
+        assert len(received) == 1
+        body = json.loads(received[0].data)
+        assert "schema_version" in body
+        assert body["schema_version"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Issue #255: homeric-deadletter stream creation integration test
+# ---------------------------------------------------------------------------
+
+
+class TestDeadLetterStreamCreation:
+    """Verify that the homeric-deadletter stream is created when enable_dead_letter=True."""
+
+    @pytest.mark.integration
+    async def test_deadletter_stream_created_on_connect(self, nats_url: str) -> None:
+        """Publisher with enable_dead_letter=True creates homeric-deadletter stream in NATS."""
+        pub = Publisher(enable_dead_letter=True)
+        await pub.connect(nats_url)
+        try:
+            jsm = pub._nc.jsm()
+            info = await jsm.stream_info("homeric-deadletter")
+            assert info is not None
+            assert info.config.name == "homeric-deadletter"
+            assert "hi.deadletter.>" in info.config.subjects
+        finally:
+            await pub.disconnect()
+
+    @pytest.mark.integration
+    async def test_deadletter_stream_in_stream_names(self, nats_url: str) -> None:
+        """homeric-deadletter appears in publisher.stream_names after connect with dead letter enabled."""
+        pub = Publisher(enable_dead_letter=True)
+        await pub.connect(nats_url)
+        try:
+            assert "homeric-deadletter" in pub.stream_names
+        finally:
+            await pub.disconnect()
+
+    @pytest.mark.integration
+    async def test_deadletter_stream_is_idempotent(self, nats_url: str) -> None:
+        """Reconnecting with enable_dead_letter=True does not raise even if stream already exists."""
+        pub1 = Publisher(enable_dead_letter=True)
+        await pub1.connect(nats_url)
+        await pub1.disconnect()
+
+        pub2 = Publisher(enable_dead_letter=True)
+        await pub2.connect(nats_url)
+        try:
+            jsm = pub2._nc.jsm()
+            info = await jsm.stream_info("homeric-deadletter")
+            assert info is not None
+        finally:
+            await pub2.disconnect()
