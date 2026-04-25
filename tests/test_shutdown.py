@@ -143,9 +143,11 @@ class TestShutdownMiddleware:
 
     def test_webhook_accepted_when_not_shutting_down(self) -> None:
         import hermes.server as srv
+        from hermes.config import get_settings
 
         srv._shutdown_event = asyncio.Event()
-        # webhook_secret="" is the default; no env override needed
+        # Disable HMAC validation so the test works regardless of .env contents
+        get_settings().webhook_secret = ""
         client = _build_client()
         response = client.post(
             "/webhook",

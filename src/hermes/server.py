@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -169,6 +170,21 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(429, rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
+
+@app.exception_handler(HTTPException)
+async def _http_exception_handler_with_request_id(
+    request: Request, exc: HTTPException
+) -> JSONResponse:
+    """Augment HTTPException responses with request_id from request.state when available."""
+    request_id: str | None = getattr(request.state, "request_id", None)
+    response = await http_exception_handler(request, exc)
+    body: dict[str, object] = {"detail": exc.detail, "request_id": request_id}
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=body,
+        headers=dict(response.headers),
+    )
+
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
@@ -304,7 +320,9 @@ async def receive_webhook(
     try:
         payload = WebhookPayload.model_validate_json(raw_body)
     except Exception as exc:
-        logger.warning("Invalid webhook payload: %s", exc)
+        logger.warning(
+            "Invalid webhook payload: %s", exc, extra={"request_id": request_id}
+        )
         WEBHOOKS_FAILED.labels(reason="invalid_payload").inc()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -316,9 +334,9 @@ async def receive_webhook(
     publisher: Publisher = app.state.publisher
     if not publisher.is_connected:
         logger.error(
-            "NATS not connected; cannot publish event %r (request_id=%s)",
+            "NATS not connected; cannot publish event %r",
             payload.event,
-            request_id,
+            extra={"request_id": request_id},
         )
         WEBHOOKS_FAILED.labels(reason="nats_not_connected").inc()
         raise HTTPException(
@@ -333,6 +351,11 @@ async def receive_webhook(
             request_id=request_id,
         )
     except asyncio.TimeoutError:
+        logger.error(
+            "NATS publish timed out for event %r",
+            payload.event,
+            extra={"request_id": request_id},
+        )
         WEBHOOKS_FAILED.labels(reason="publish_timeout").inc()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
