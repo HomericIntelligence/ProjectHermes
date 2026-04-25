@@ -82,6 +82,19 @@ class TestHermesHostValidation:
         assert s.hermes_host == "::1"
 
 
+class TestGetSettingsEnvOverride:
+    """Issue #136 — get_settings() must reflect HERMES_HOST env-var override."""
+
+    def test_get_settings_reflects_hermes_host_override(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """monkeypatch HERMES_HOST and verify get_settings() picks it up."""
+        monkeypatch.setenv("HERMES_HOST", "127.0.0.1")
+        from hermes.config import get_settings
+
+        assert get_settings().hermes_host == "127.0.0.1"
+
+
 class TestHermesPublicUrl:
     def test_public_url_defaults_to_localhost_port(self) -> None:
         from hermes.config import Settings

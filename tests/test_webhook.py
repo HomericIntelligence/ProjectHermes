@@ -932,3 +932,96 @@ class TestMissingFieldWarnings:
             pub = Publisher()
             pub._parse_agent_subject({"host": "myhost", "name": "bot"}, "agent.created")
             assert not mock_log.warning.called
+
+
+class TestPublisherRaises:
+    """Issue #122 — publisher.publish() raising must return 500, not propagate."""
+
+    def test_publish_runtime_error_returns_500(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When publisher.publish raises RuntimeError the endpoint returns 500."""
+        from hermes.publisher import Publisher
+        from hermes.server import app
+
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+
+        mock_publisher = MagicMock(spec=Publisher)
+        mock_publisher.is_connected = True
+        mock_publisher.active_subjects = []
+        mock_publisher.publish = AsyncMock(side_effect=RuntimeError("NATS exploded"))
+
+        app.state.publisher = mock_publisher
+        client = TestClient(app, raise_server_exceptions=False)
+
+        payload = {
+            "event": "agent.created",
+            "data": {"host": "localhost", "name": "bot"},
+            "timestamp": "2026-03-15T00:00:00Z",
+        }
+        body_bytes = json.dumps(payload).encode()
+        response = client.post(
+            "/webhook",
+            content=body_bytes,
+            headers={
+                "Content-Type": "application/json",
+                "X-Webhook-Signature": _sign(body_bytes),
+            },
+        )
+        assert response.status_code == 500
+
+
+class TestExceptionDetailNotLeaked:
+    """Issue #158 — internal exception detail must not appear in response body."""
+
+    def test_invalid_payload_response_has_no_traceback(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """422 response body must only contain 'detail', no stack trace or internal info."""
+        import logging
+
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        client = _build_client()
+        body_bytes = json.dumps({"bad": "payload"}).encode()
+
+        with caplog.at_level(logging.WARNING):
+            response = client.post(
+                "/webhook",
+                content=body_bytes,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Webhook-Signature": _sign(body_bytes),
+                },
+            )
+
+        assert response.status_code == 422
+        body_text = response.text
+        assert "Traceback" not in body_text
+        assert "File " not in body_text
+        assert "detail" in response.json()
+
+    def test_invalid_payload_emits_warning_log(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A WARNING-level log must be emitted when the webhook payload is invalid."""
+        import logging
+
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        client = _build_client()
+        body_bytes = json.dumps({"bad": "payload"}).encode()
+
+        with caplog.at_level(logging.WARNING, logger="hermes"):
+            response = client.post(
+                "/webhook",
+                content=body_bytes,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Webhook-Signature": _sign(body_bytes),
+                },
+            )
+
+        assert response.status_code == 422
+        warning_records = [
+            r for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert len(warning_records) >= 1
