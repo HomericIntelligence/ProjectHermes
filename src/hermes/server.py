@@ -12,7 +12,7 @@ import signal
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -25,6 +25,7 @@ from hermes.logging_config import setup_logging
 from hermes.metrics import WEBHOOKS_FAILED, WEBHOOKS_RECEIVED
 from hermes.middleware import PayloadSizeLimitMiddleware
 from hermes.models import (
+    DeadLettersResponse,
     ErrorResponse,
     HealthResponse,
     SubjectsResponse,
@@ -363,11 +364,30 @@ async def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.get("/dead-letters")
-async def dead_letters() -> dict[str, list[dict[str, Any]]]:
-    """Return the in-memory dead-letter queue of unroutable webhook events."""
+@app.get("/dead-letters", response_model=DeadLettersResponse)
+async def dead_letters(
+    limit: int | None = None,
+    offset: int = 0,
+) -> DeadLettersResponse:
+    """Return the in-memory dead-letter queue with optional pagination.
+
+    Query params:
+    - ``offset``: number of items to skip (default 0).
+    - ``limit``: maximum number of items to return (default: all).
+    """
     publisher: Publisher = app.state.publisher
-    return {"dead_letters": publisher.dead_letters}
+    all_items = publisher.dead_letters
+    total = len(all_items)
+    sliced = all_items[offset:] if limit is None else all_items[offset : offset + limit]
+    return DeadLettersResponse(total=total, offset=offset, limit=limit, items=sliced)
+
+
+@app.delete("/dead-letters", status_code=status.HTTP_200_OK)
+async def drain_dead_letters() -> dict[str, int]:
+    """Drain (clear) the in-memory dead-letter queue and return the count of drained items."""
+    publisher: Publisher = app.state.publisher
+    drained = publisher.drain_dead_letters()
+    return {"drained": drained}
 
 
 @app.get("/events")

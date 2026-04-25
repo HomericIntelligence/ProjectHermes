@@ -127,6 +127,12 @@ class Publisher:
     def dead_letter_count(self) -> int:
         return len(self._dead_letters)
 
+    def drain_dead_letters(self) -> int:
+        """Clear the dead-letter queue and return the number of drained items."""
+        count = len(self._dead_letters)
+        self._dead_letters.clear()
+        return count
+
     # ------------------------------------------------------------------
     # Publishing
     # ------------------------------------------------------------------
