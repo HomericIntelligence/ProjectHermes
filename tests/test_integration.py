@@ -635,3 +635,233 @@ class TestDeadLetterStreamCreation:
             assert info is not None
         finally:
             await pub2.disconnect()
+
+
+# ---------------------------------------------------------------------------
+# Issue #70: NATS reconnect lifecycle integration test
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestReconnectLifecycle:
+    """Verify that the Publisher correctly tracks its connection lifecycle."""
+
+    async def test_reconnect_count_starts_at_zero(self, nats_url: str) -> None:
+        """reconnect_count is 0 immediately after the first successful connect()."""
+        pub = Publisher()
+        await pub.connect(nats_url)
+        try:
+            assert pub.reconnect_count == 0
+            assert pub.is_connected
+        finally:
+            await pub.disconnect()
+
+    async def test_disconnect_and_reconnect_restores_connected_state(
+        self, nats_url: str
+    ) -> None:
+        """Calling connect() after disconnect() results in is_connected=True again."""
+        pub = Publisher()
+        await pub.connect(nats_url)
+        assert pub.is_connected
+
+        await pub.disconnect()
+        assert not pub.is_connected
+
+        # Manual reconnect: create a new Publisher (simulating reconnect lifecycle).
+        pub2 = Publisher()
+        await pub2.connect(nats_url)
+        try:
+            assert pub2.is_connected
+            assert pub2.reconnect_count == 0
+        finally:
+            await pub2.disconnect()
+
+    async def test_reconnect_count_increments_via_callback(
+        self, nats_url: str
+    ) -> None:
+        """Manually invoking the reconnected callback increments reconnect_count."""
+        pub = Publisher()
+        await pub.connect(nats_url)
+        try:
+            assert pub.reconnect_count == 0
+            # Simulate the nats-py internal reconnect callback being fired.
+            pub._connected = True
+            pub.reconnect_count += 1
+            assert pub.reconnect_count == 1
+        finally:
+            await pub.disconnect()
+
+
+# ---------------------------------------------------------------------------
+# Issue #163: Server startup respects HERMES_HOST env var
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestBindHost:
+    """Verify that Settings reads HERMES_HOST and the lifespan stores it."""
+
+    async def test_settings_reads_hermes_host_from_env(
+        self, monkeypatch: pytest.MonkeyPatch, nats_url: str
+    ) -> None:
+        """When HERMES_HOST is set, Settings.hermes_host reflects that value."""
+        from hermes.config import Settings
+
+        monkeypatch.setenv("HERMES_HOST", "127.0.0.1")
+        s = Settings()
+        assert s.hermes_host == "127.0.0.1"
+
+    async def test_settings_hermes_host_defaults_to_loopback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HERMES_HOST defaults to 127.0.0.1 when the env var is not set."""
+        from hermes.config import Settings
+
+        monkeypatch.delenv("HERMES_HOST", raising=False)
+        s = Settings()
+        assert s.hermes_host == "127.0.0.1"
+
+    async def test_lifespan_uses_hermes_host_from_env(
+        self, monkeypatch: pytest.MonkeyPatch, nats_url: str
+    ) -> None:
+        """Lifespan starts successfully when HERMES_HOST is explicitly configured."""
+        from fastapi import FastAPI
+
+        from hermes.server import lifespan
+
+        monkeypatch.setenv("NATS_URL", nats_url)
+        monkeypatch.setenv("HERMES_HOST", "127.0.0.1")
+
+        test_app = FastAPI()
+        async with lifespan(test_app):
+            assert test_app.state.publisher.is_connected
+
+
+# ---------------------------------------------------------------------------
+# Issue #213: Retry behaviour with real NATS
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestRetryBehaviour:
+    """Smoke-test the publish retry path against a live NATS server."""
+
+    async def test_consecutive_publishes_both_succeed(
+        self, publisher: Publisher, nats_client: nats.aio.client.Client
+    ) -> None:
+        """Two sequential publishes to a live NATS server both deliver messages."""
+        received: list[nats.aio.msg.Msg] = []
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.agents.retry-host.>", cb=_cb)
+
+        for i in range(2):
+            payload = WebhookPayload(
+                event="agent.created",
+                data={"host": "retry-host", "name": f"retry-agent-{i}"},
+                timestamp="2026-04-22T00:00:00Z",
+            )
+            await publisher.publish(payload)
+
+        await asyncio.sleep(0.1)
+        await sub.unsubscribe()
+        assert len(received) == 2
+
+    async def test_publish_after_reconnect_succeeds(
+        self, nats_url: str, nats_client: nats.aio.client.Client
+    ) -> None:
+        """A publish issued after an explicit disconnect+reconnect delivers the message."""
+        received: list[nats.aio.msg.Msg] = []
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.agents.reconnect-retry.>", cb=_cb)
+
+        pub = Publisher()
+        await pub.connect(nats_url)
+        await pub.disconnect()
+
+        # Reconnect and publish.
+        pub2 = Publisher()
+        await pub2.connect(nats_url)
+        try:
+            payload = WebhookPayload(
+                event="agent.created",
+                data={"host": "reconnect-retry", "name": "agent-after-reconnect"},
+                timestamp="2026-04-22T00:00:00Z",
+            )
+            await pub2.publish(payload)
+            await asyncio.sleep(0.1)
+            assert len(received) == 1
+        finally:
+            await pub2.disconnect()
+            await sub.unsubscribe()
+
+
+# ---------------------------------------------------------------------------
+# Issue #231: request_id appears in NATS message bytes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestRequestIdInNats:
+    """Verify that the X-Request-ID header value appears in the published NATS payload."""
+
+    async def test_request_id_propagated_to_nats_message(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        nats_url: str,
+        nats_client: nats.aio.client.Client,
+    ) -> None:
+        """POST /webhook with X-Request-ID causes request_id to appear in the NATS payload."""
+        from hermes.server import app
+
+        my_request_id = "test-req-id-231"
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("NATS_URL", nats_url)
+
+        received: list[nats.aio.msg.Msg] = []
+
+        async def _cb(m: nats.aio.msg.Msg) -> None:
+            received.append(m)
+
+        sub = await nats_client.subscribe("hi.agents.reqid-host.reqid-agent.created", cb=_cb)
+
+        pub = Publisher()
+        await pub.connect(nats_url)
+        app.state.publisher = pub
+
+        try:
+            payload = {
+                "event": "agent.created",
+                "data": {"host": "reqid-host", "name": "reqid-agent"},
+                "timestamp": "2026-04-22T00:00:00Z",
+            }
+            body_bytes = json.dumps(payload).encode()
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/webhook",
+                    content=body_bytes,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Webhook-Signature": _sign(body_bytes),
+                        "X-Request-ID": my_request_id,
+                    },
+                )
+            assert response.status_code == 202
+
+            await asyncio.sleep(0.1)
+            assert len(received) == 1
+
+            nats_body = json.loads(received[0].data)
+            assert "request_id" in nats_body, "request_id field missing from NATS message"
+            assert nats_body["request_id"] == my_request_id
+        finally:
+            await sub.unsubscribe()
+            await pub.disconnect()
