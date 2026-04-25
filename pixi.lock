@@ -319,7 +319,7 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: ed836fea7ea59dd770732c139a4804088eccd1fb568815b3476116a22b16c8b1
+  sha256: 37a325d336dade3c85958384812197afd3078557f8de1fae35ad1ee2bef4aeb2
   requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl
   name: httpcore
