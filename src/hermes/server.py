@@ -118,10 +118,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             settings.nats_retry_attempts,
         )
 
-    # Install signal handlers so SIGTERM/SIGINT trigger graceful shutdown
+    # Install signal handlers so SIGTERM/SIGINT trigger graceful shutdown.
+    # Silently skip in non-main threads (e.g. TestClient workers).
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, _on_shutdown_signal, sig)
+        try:
+            loop.add_signal_handler(sig, _on_shutdown_signal, sig)
+        except ValueError:
+            pass
 
     _shutdown_event = asyncio.Event()
     _inflight = 0
