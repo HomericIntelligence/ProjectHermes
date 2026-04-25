@@ -85,6 +85,7 @@ class ErrorResponse(BaseModel):
     """Standard error response body."""
 
     detail: str
+    request_id: str | None = None
 
 
 class VersionResponse(BaseModel):

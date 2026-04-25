@@ -278,8 +278,8 @@ class TestWebhookEndpoint:
         mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
         app.state.publisher = mock_publisher
 
-        from hermes.config import settings
-        settings.webhook_secret = _TEST_SECRET
+        from hermes.config import get_settings
+        get_settings().webhook_secret = _TEST_SECRET
 
         client = TestClient(app, raise_server_exceptions=False)
         payload = {
