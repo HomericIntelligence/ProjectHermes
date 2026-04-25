@@ -64,13 +64,8 @@ def _on_shutdown_signal(sig: signal.Signals) -> None:
     _shutdown_event.set()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Connect to NATS on startup with retries; abort startup if all attempts fail."""
-    global _shutdown_event, _inflight
-
-    settings = get_settings()
-    publisher = Publisher(enable_dead_letter=settings.enable_dead_letter)
+async def _connect_to_nats(publisher: Publisher, settings: "Settings") -> Exception | None:
+    """Attempt to connect to NATS with retries. Returns the last exception or None on success."""
     last_exc: Exception | None = None
     for attempt in range(1, settings.nats_retry_attempts + 1):
         try:
@@ -80,8 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 ),
                 timeout=_NATS_CONNECT_TIMEOUT,
             )
-            last_exc = None
-            break
+            return None
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             will_retry = attempt < settings.nats_retry_attempts
@@ -94,6 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     exc,
                     settings.nats_retry_interval,
                 )
+                await asyncio.sleep(settings.nats_retry_interval)
             else:
                 logger.error(
                     "NATS connect attempt %d/%d failed (%s: %s); giving up",
@@ -102,8 +97,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     type(exc).__name__,
                     exc,
                 )
-            if will_retry:
-                await asyncio.sleep(settings.nats_retry_interval)
+    return last_exc
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Connect to NATS on startup with retries; abort startup if all attempts fail."""
+    global _shutdown_event, _inflight
+
+    settings = get_settings()
+    publisher = Publisher(enable_dead_letter=settings.enable_dead_letter)
+    last_exc = await _connect_to_nats(publisher, settings)
 
     if last_exc is not None:
         logger.critical(
