@@ -65,8 +65,18 @@ def _on_shutdown_signal(sig: signal.Signals) -> None:
     _shutdown_event.set()
 
 
-async def _connect_to_nats(publisher: Publisher, settings: "Settings") -> Exception | None:
-    """Attempt to connect to NATS with retries. Returns the last exception or None on success."""
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Connect to NATS on startup with retries; continue degraded if all attempts fail.
+
+    If NATS is unreachable after all retry attempts the app still starts so that
+    /health can return 503 and load-balancers can observe the degraded state.
+    The publisher remains disconnected; /webhook will return 503 until NATS recovers.
+    """
+    global _shutdown_event, _inflight
+
+    settings = get_settings()
+    publisher = Publisher(enable_dead_letter=settings.enable_dead_letter)
     last_exc: Exception | None = None
     for attempt in range(1, settings.nats_retry_attempts + 1):
         try:
@@ -76,7 +86,8 @@ async def _connect_to_nats(publisher: Publisher, settings: "Settings") -> Except
                 ),
                 timeout=_NATS_CONNECT_TIMEOUT,
             )
-            return None
+            last_exc = None
+            break
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
             will_retry = attempt < settings.nats_retry_attempts
@@ -98,25 +109,14 @@ async def _connect_to_nats(publisher: Publisher, settings: "Settings") -> Except
                     type(exc).__name__,
                     exc,
                 )
-    return last_exc
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Connect to NATS on startup with retries; abort startup if all attempts fail."""
-    global _shutdown_event, _inflight
-
-    settings = get_settings()
-    publisher = Publisher(enable_dead_letter=settings.enable_dead_letter)
-    last_exc = await _connect_to_nats(publisher, settings)
 
     if last_exc is not None:
         logger.critical(
-            "Could not connect to NATS at %s after %d attempts; aborting startup",
+            "Could not connect to NATS at %s after %d attempts; "
+            "starting in degraded mode — /health will return 503",
             settings.nats_url,
             settings.nats_retry_attempts,
         )
-        raise last_exc
 
     # Install signal handlers so SIGTERM/SIGINT trigger graceful shutdown
     loop = asyncio.get_event_loop()

@@ -52,43 +52,49 @@ async def test_lifespan_retries_then_succeeds(mock_publisher: MagicMock) -> None
 
 
 @pytest.mark.anyio
-async def test_lifespan_all_retries_exhausted_raises(mock_publisher: MagicMock) -> None:
-    """connect() always fails; lifespan re-raises; critical logged once."""
+async def test_lifespan_all_retries_exhausted_starts_degraded(mock_publisher: MagicMock) -> None:
+    """connect() always fails; lifespan starts in degraded mode (no raise); critical logged once."""
     from hermes.server import lifespan, app
 
     err = ConnectionRefusedError("NATS unreachable")
     mock_publisher.connect.side_effect = err
+    mock_publisher.is_connected = False
 
     with (
         patch("hermes.server.Publisher", return_value=mock_publisher),
         patch("hermes.server.asyncio.sleep", new_callable=AsyncMock),
         patch("hermes.server.logger") as mock_logger,
-        pytest.raises(ConnectionRefusedError),
     ):
         async with lifespan(app):
-            pass  # should not reach here
+            # App starts in degraded mode — publisher is set on state
+            assert app.state.publisher is mock_publisher
 
     mock_logger.critical.assert_called_once()
     assert mock_publisher.connect.await_count == 3
 
 
 @pytest.mark.anyio
-async def test_lifespan_no_warning_logged(mock_publisher: MagicMock) -> None:
-    """The old swallowing behavior used logger.warning — ensure it's no longer called."""
+async def test_lifespan_degraded_health_returns_503(mock_publisher: MagicMock) -> None:
+    """When NATS fails to connect, /health returns 503 with degraded status."""
+    from fastapi.testclient import TestClient
     from hermes.server import lifespan, app
 
-    mock_publisher.connect.side_effect = OSError("down")
+    err = OSError("NATS down")
+    mock_publisher.connect.side_effect = err
+    mock_publisher.is_connected = False
+    mock_publisher.dead_letter_count = 0
 
     with (
         patch("hermes.server.Publisher", return_value=mock_publisher),
         patch("hermes.server.asyncio.sleep", new_callable=AsyncMock),
-        patch("hermes.server.logger") as mock_logger,
-        pytest.raises(OSError),
     ):
         async with lifespan(app):
-            pass
-
-    mock_logger.warning.assert_not_called()
+            client = TestClient(app, raise_server_exceptions=False)
+            resp = client.get("/health")
+            assert resp.status_code == 503
+            body = resp.json()
+            assert body["status"] == "degraded"
+            assert body["nats_connected"] is False
 
 
 @pytest.mark.anyio
@@ -110,12 +116,12 @@ async def test_lifespan_error_log_includes_attempt_info(mock_publisher: MagicMoc
     from hermes.config import get_settings
 
     mock_publisher.connect.side_effect = RuntimeError("boom")
+    mock_publisher.is_connected = False
 
     with (
         patch("hermes.server.Publisher", return_value=mock_publisher),
         patch("hermes.server.asyncio.sleep", new_callable=AsyncMock),
         patch("hermes.server.logger") as mock_logger,
-        pytest.raises(RuntimeError),
     ):
         async with lifespan(app):
             pass
