@@ -13,6 +13,7 @@ RUN useradd -r -s /usr/sbin/nologin hermes
 USER hermes
 
 ENV HERMES_PORT=8080
+ENV HERMES_PUBLIC_URL=http://localhost:8080
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

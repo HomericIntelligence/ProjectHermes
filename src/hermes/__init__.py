@@ -2,11 +2,11 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from hermes.models import AgentEvent, HermesEventBase, TaskEvent
+from hermes.models import HermesEventBase
 
 try:
     __version__ = version("hermes")
 except PackageNotFoundError:
     __version__ = "unknown"
 
-__all__ = ["AgentEvent", "HermesEventBase", "TaskEvent", "__version__"]
+__all__ = ["HermesEventBase", "__version__"]

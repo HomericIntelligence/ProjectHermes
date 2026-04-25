@@ -9,7 +9,7 @@ import json
 import os
 from collections.abc import Generator
 from contextlib import contextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
@@ -119,13 +119,10 @@ class TestNatsPublishTimeout:
         from hermes.config import get_settings
         from hermes.rate_limit import limiter
 
-        async def _slow_publish(*_args: object, **_kwargs: object) -> None:
-            await asyncio.sleep(10)
-
         mock_publisher = MagicMock(spec=Publisher)
         mock_publisher.is_connected = True
         mock_publisher.active_subjects = []
-        mock_publisher.publish = _slow_publish
+        mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError)
 
         app.state.publisher = mock_publisher
         limiter._storage.reset()  # type: ignore[attr-defined]
@@ -138,11 +135,8 @@ class TestNatsPublishTimeout:
         os.environ.update(env_overrides)
         get_settings.cache_clear()
         try:
-            with patch(
-                "hermes.server.asyncio.wait_for", side_effect=asyncio.TimeoutError
-            ):
-                client = TestClient(app, raise_server_exceptions=False)
-                response = _post_webhook(client)
+            client = TestClient(app, raise_server_exceptions=False)
+            response = _post_webhook(client)
         finally:
             get_settings.cache_clear()
             for k, v in old_env.items():

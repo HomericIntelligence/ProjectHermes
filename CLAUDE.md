@@ -31,6 +31,10 @@ NATS JetStream (via ProjectKeystone)
 - Agent events: `hi.agents.{host}.{name}.{event}`
 - Task events:  `hi.tasks.{team_id}.{task_id}.{event}`
 
+**Subject slug limit:** Each token in a NATS subject (host, name, team\_id, task\_id, event) is
+sanitised and truncated to **64 characters** (`_SLUG_MAX_LEN = 64` in `publisher.py`).
+Values that exceed 64 characters are silently truncated before routing.
+
 ## Configuration
 
 | Variable          | Default                        | Description                                             |

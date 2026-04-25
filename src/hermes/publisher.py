@@ -29,6 +29,7 @@ TASK_EVENTS: frozenset[str] = frozenset({"task.updated", "task.completed", "task
 
 
 _DEAD_LETTER_SUBJECT_PREFIX = "hi.deadletter"
+_SLUG_MAX_LEN = 64  # Maximum characters per NATS subject slug token
 
 
 class Publisher:
@@ -214,7 +215,11 @@ class Publisher:
 # ------------------------------------------------------------------
 
 def _slug(value: str) -> str:
-    """Sanitise a token for use in a NATS subject (replace spaces/dots/wildcards)."""
+    """Sanitise a token for use in a NATS subject (replace spaces/dots/wildcards).
+
+    Tokens are truncated to ``_SLUG_MAX_LEN`` (64) characters to keep NATS subjects
+    within reasonable bounds.
+    """
     return (
         str(value)
         .replace(" ", "-")
@@ -222,4 +227,4 @@ def _slug(value: str) -> str:
         .replace("*", "")
         .replace(">", "")
         .lower()
-    )
+    )[:_SLUG_MAX_LEN]

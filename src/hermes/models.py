@@ -17,26 +17,6 @@ class HermesEventBase(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class AgentEvent(HermesEventBase):
-    """Structured representation of an agent lifecycle event."""
-
-    host: str
-    name: str
-    event: str
-    agent_id: str
-    metadata: dict[str, Any] = {}
-
-
-class TaskEvent(HermesEventBase):
-    """Structured representation of a task state-change event."""
-
-    team_id: str
-    task_id: str
-    event: str
-    status: str
-    metadata: dict[str, Any] = {}
-
-
 class WebhookPayload(BaseModel):
     """Incoming webhook payload from an external service (inbound DTO)."""
 
