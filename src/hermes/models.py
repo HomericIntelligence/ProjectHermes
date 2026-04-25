@@ -91,3 +91,12 @@ class VersionResponse(BaseModel):
     """Response body for GET /version."""
 
     version: str
+
+
+class DeadLettersResponse(BaseModel):
+    """Response body for GET /dead-letters (paginated)."""
+
+    total: int
+    offset: int
+    limit: int | None
+    items: list[dict[str, Any]]

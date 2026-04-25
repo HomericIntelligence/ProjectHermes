@@ -63,15 +63,15 @@ class TestDeadLettersEndpoint:
     def test_dead_letters_returns_list_when_empty(self) -> None:
         client = _build_client()
         body = client.get("/dead-letters").json()
-        assert "dead_letters" in body
-        assert isinstance(body["dead_letters"], list)
-        assert body["dead_letters"] == []
+        assert "items" in body
+        assert isinstance(body["items"], list)
+        assert body["items"] == []
 
     def test_dead_letters_returns_entries(self) -> None:
         entries = [{"event": "unknown.event", "data": {"foo": "bar"}}]
         client = _build_client(dead_letters=entries)
         body = client.get("/dead-letters").json()
-        assert body["dead_letters"] == entries
+        assert body["items"] == entries
 
 
 class TestWebhookMetricsInstrumentation:
