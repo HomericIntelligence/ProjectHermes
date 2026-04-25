@@ -274,19 +274,18 @@ class TestLifespan:
     async def test_lifespan_handles_nats_unavailable(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Lifespan raises when NATS is unreachable after all retry attempts."""
+        """Lifespan starts in degraded mode when NATS is unreachable after all retry attempts."""
         from unittest.mock import patch
         from hermes.config import Settings
         from hermes.server import lifespan
         from fastapi import FastAPI
 
-        bad_settings = Settings(nats_url="nats://127.0.0.1:19999")
+        bad_settings = Settings(nats_url="nats://127.0.0.1:19999", nats_retry_attempts=1)
         test_app = FastAPI()
 
         with patch("hermes.server.get_settings", return_value=bad_settings):
-            with pytest.raises(Exception):
-                async with lifespan(test_app):
-                    pass
+            async with lifespan(test_app):
+                assert not test_app.state.publisher.is_connected
 
 
 # ---------------------------------------------------------------------------

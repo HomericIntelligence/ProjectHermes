@@ -73,11 +73,10 @@ async def test_lifespan_all_retries_exhausted_starts_degraded(mock_publisher: Ma
     assert mock_publisher.connect.await_count == 3
 
 
-@pytest.mark.anyio
-async def test_lifespan_degraded_health_returns_503(mock_publisher: MagicMock) -> None:
+def test_lifespan_degraded_health_returns_503(mock_publisher: MagicMock) -> None:
     """When NATS fails to connect, /health returns 503 with degraded status."""
     from fastapi.testclient import TestClient
-    from hermes.server import lifespan, app
+    from hermes.server import app
 
     err = OSError("NATS down")
     mock_publisher.connect.side_effect = err
@@ -88,8 +87,7 @@ async def test_lifespan_degraded_health_returns_503(mock_publisher: MagicMock) -
         patch("hermes.server.Publisher", return_value=mock_publisher),
         patch("hermes.server.asyncio.sleep", new_callable=AsyncMock),
     ):
-        async with lifespan(app):
-            client = TestClient(app, raise_server_exceptions=False)
+        with TestClient(app, raise_server_exceptions=False) as client:
             resp = client.get("/health")
             assert resp.status_code == 503
             body = resp.json()
@@ -146,7 +144,6 @@ async def test_lifespan_no_sleep_after_last_retry(mock_publisher: MagicMock) -> 
         patch("hermes.server.Publisher", return_value=mock_publisher),
         patch("hermes.server.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
         patch("hermes.server.logger"),
-        pytest.raises(RuntimeError),
     ):
         async with lifespan(app):
             pass
@@ -165,7 +162,6 @@ async def test_lifespan_last_error_log_omits_retry_message(mock_publisher: Magic
         patch("hermes.server.Publisher", return_value=mock_publisher),
         patch("hermes.server.asyncio.sleep", new_callable=AsyncMock),
         patch("hermes.server.logger") as mock_logger,
-        pytest.raises(RuntimeError),
     ):
         async with lifespan(app):
             pass
@@ -227,7 +223,6 @@ async def test_last_retry_logs_giving_up_not_retrying(mock_publisher: MagicMock)
         patch("hermes.server.Publisher", return_value=mock_publisher),
         patch("hermes.server.asyncio.sleep", new_callable=AsyncMock),
         patch("hermes.server.logger") as mock_logger,
-        pytest.raises(RuntimeError),
     ):
         async with lifespan(app):
             pass
