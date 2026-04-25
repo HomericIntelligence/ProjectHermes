@@ -50,6 +50,8 @@ Unknown event types are routed to the `homeric-deadletter` NATS stream for inspe
 | WEBHOOK_SECRET        |                                | HMAC secret for webhook validation (minimum 32 characters) |
 | NATS_CONNECT_TIMEOUT  | 5.0                            | NATS connection timeout in seconds                      |
 | NATS_PUBLISH_TIMEOUT  | 5.0                            | NATS publish timeout in seconds                         |
+| AGAMEMNON_URL         |                                | Base URL of the Agamemnon coordination service          |
+| AGAMEMNON_API_KEY     |                                | API key for authenticating with Agamemnon               |
 | AGAMEMNON_TIMEOUT     | 10.0                           | Agamemnon API call timeout in seconds                   |
 | SHUTDOWN_TIMEOUT      | 10.0                           | Graceful shutdown timeout in seconds                    |
 
