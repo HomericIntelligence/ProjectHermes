@@ -478,6 +478,14 @@ class TestRetryableExceptions:
     def test_retryable_tuple_contains_drain_timeout_error(self) -> None:
         assert nats.errors.DrainTimeoutError in _RETRYABLE_PUBLISH_ERRORS
 
+    def test_retryable_tuple_contains_connection_reconnecting_error(self) -> None:
+        """ConnectionReconnectingError is retryable (issue #74: reconnection race)."""
+        assert nats.errors.ConnectionReconnectingError in _RETRYABLE_PUBLISH_ERRORS
+
+    def test_retryable_tuple_contains_stale_connection_error(self) -> None:
+        """StaleConnectionError is retryable (issue #74: reconnection race)."""
+        assert nats.errors.StaleConnectionError in _RETRYABLE_PUBLISH_ERRORS
+
     @pytest.mark.asyncio
     async def test_drain_timeout_error_is_retried(self) -> None:
         pub = _make_connected_publisher()
@@ -530,3 +538,113 @@ class TestRetryableExceptions:
                     )
 
             assert pub._js.publish.call_count == 2, f"Expected 2 attempts for {error_cls}"
+
+
+class TestReconnectRace:
+    """Issue #74: ConnectionReconnectingError / StaleConnectionError are retried.
+
+    When NATS loses its connection between the is_connected check in server.py and
+    the actual publish call, nats-py raises ConnectionReconnectingError or
+    StaleConnectionError.  These are transient and should be retried.
+    """
+
+    @pytest.mark.asyncio
+    async def test_connection_reconnecting_error_is_retried(self) -> None:
+        pub = _make_connected_publisher()
+        pub._js.publish = AsyncMock(
+            side_effect=[nats.errors.ConnectionReconnectingError(), MagicMock()]
+        )
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await pub.publish(_agent_payload(), publish_retries=3, publish_retry_base_delay=0.01)
+
+        assert pub._js.publish.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_stale_connection_error_is_retried(self) -> None:
+        pub = _make_connected_publisher()
+        pub._js.publish = AsyncMock(
+            side_effect=[nats.errors.StaleConnectionError(), MagicMock()]
+        )
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await pub.publish(_agent_payload(), publish_retries=3, publish_retry_base_delay=0.01)
+
+        assert pub._js.publish.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_reconnecting_error_exhausts_retry_budget(self) -> None:
+        pub = _make_connected_publisher()
+        pub._js.publish = AsyncMock(side_effect=nats.errors.ConnectionReconnectingError())
+
+        with pytest.raises(nats.errors.ConnectionReconnectingError):
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                await pub.publish(_agent_payload(), publish_retries=3, publish_retry_base_delay=0.01)
+
+        assert pub._js.publish.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_connection_closed_error_is_not_retried(self) -> None:
+        """ConnectionClosedError is distinct from reconnecting and must not be retried."""
+        pub = _make_connected_publisher()
+        pub._js.publish = AsyncMock(side_effect=nats.errors.ConnectionClosedError())
+
+        with pytest.raises(nats.errors.ConnectionClosedError):
+            with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                await pub.publish(_agent_payload(), publish_retries=3, publish_retry_base_delay=0.01)
+
+        assert pub._js.publish.call_count == 1
+        mock_sleep.assert_not_awaited()
+
+
+class TestTLSPublisherConnect:
+    """Issue #185: TLS publisher connect tests must not generate RuntimeWarnings.
+
+    When build_ssl_context() returns an SSLContext, Publisher.connect() passes it
+    to nats.connect().  Ensure the mock is properly awaited and no RuntimeWarning
+    (unawaited coroutine) is emitted.
+    """
+
+    @pytest.mark.asyncio
+    async def test_connect_with_tls_ssl_context_no_runtime_warning(self) -> None:
+        """Connecting with a TLS SSL context does not generate a RuntimeWarning."""
+        import warnings
+
+        pub = Publisher()
+        mock_nc = MagicMock()
+        mock_nc.jetstream.return_value = MagicMock()
+        jsm = AsyncMock()
+        jsm.stream_info = AsyncMock(return_value=MagicMock())
+        jsm.add_stream = AsyncMock()
+        mock_nc.jsm.return_value = jsm
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            with patch("nats.connect", return_value=mock_nc) as mock_connect:
+                await pub.connect("tls://localhost:4222")
+                mock_connect.assert_called_once()
+
+        assert pub.is_connected is True
+
+    @pytest.mark.asyncio
+    async def test_connect_passes_ssl_context_from_settings(self) -> None:
+        """Publisher.connect() passes the SSL context from Settings to nats.connect()."""
+        pub = Publisher()
+        mock_nc = MagicMock()
+        mock_nc.jetstream.return_value = MagicMock()
+        jsm = AsyncMock()
+        jsm.stream_info = AsyncMock(return_value=MagicMock())
+        jsm.add_stream = AsyncMock()
+        mock_nc.jsm.return_value = jsm
+
+        captured_kwargs: dict = {}
+
+        async def fake_connect(url: str, **kwargs: object) -> MagicMock:
+            captured_kwargs.update(kwargs)
+            return mock_nc
+
+        with patch("nats.connect", side_effect=fake_connect):
+            await pub.connect("nats://localhost:4222")
+
+        # Without TLS settings the ssl kwarg is absent (no ssl_context passed)
+        assert "tls" not in captured_kwargs

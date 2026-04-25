@@ -40,10 +40,15 @@ _SLUG_MAX_LEN = 64  # Maximum characters per NATS subject slug token
 
 # Transient NATS errors that are safe to retry.  Non-retryable errors (e.g.
 # AuthorizationError, BadSubjectError) propagate immediately without retrying.
+# ConnectionReconnectingError and StaleConnectionError occur when NATS loses its
+# connection between the is_connected check in server.py and the actual publish call
+# (a TOCTOU race during reconnection).  These are transient and safe to retry.
 _RETRYABLE_PUBLISH_ERRORS = (
     nats.errors.TimeoutError,
     nats.errors.NoRespondersError,
     nats.errors.DrainTimeoutError,
+    nats.errors.ConnectionReconnectingError,
+    nats.errors.StaleConnectionError,
 )
 
 
