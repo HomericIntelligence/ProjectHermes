@@ -99,8 +99,18 @@ docker-down:
 
 # === Security ===
 
-# Scan repository for leaked secrets (requires gitleaks installed)
+# Audit dependencies for known vulnerabilities
+audit:
+    pixi run pip-audit
+
+# Scan repository for leaked secrets (requires gitleaks binary)
 scan-secrets:
+    #!/usr/bin/env bash
+    if ! command -v gitleaks &> /dev/null; then
+        echo "Error: gitleaks not found. Install it with:"
+        echo "  curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz && sudo mv gitleaks /usr/local/bin/"
+        exit 1
+    fi
     gitleaks detect --source . --config .gitleaks.toml --verbose
 
 # === NATS ===
