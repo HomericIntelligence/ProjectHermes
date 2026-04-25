@@ -44,7 +44,7 @@ jobs:
           echo "Version check passed: $PYPROJECT_VERSION"
 
       - name: Run pre-commit
-        run: pip install pre-commit && pre-commit run --all-files
+        run: pixi run pre-commit run --all-files
 
       - name: Lint
         run: pixi run lint
