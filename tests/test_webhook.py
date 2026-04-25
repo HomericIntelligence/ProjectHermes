@@ -122,6 +122,8 @@ class TestHealthEndpoint:
         mock_publisher.is_connected = True
         mock_publisher.active_subjects = []
         mock_publisher.dead_letter_count = 7
+        mock_publisher.reconnect_count = 0
+        mock_publisher.last_error = ""
         mock_publisher.publish = AsyncMock()
         app.state.publisher = mock_publisher
 

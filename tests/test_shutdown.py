@@ -23,6 +23,8 @@ def _make_mock_publisher(*, connected: bool = True) -> MagicMock:
     mock.active_subjects = []
     mock.publish = AsyncMock()
     mock.disconnect = AsyncMock()
+    mock.reconnect_count = 0
+    mock.last_error = ""
     return mock
 
 

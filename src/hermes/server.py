@@ -271,8 +271,8 @@ async def health(response: Response) -> HealthResponse:
         ),
         nats_reconnect_count=publisher.reconnect_count,
         nats_last_error=publisher.last_error,
-        nats_retry_attempts=_NATS_RETRY_ATTEMPTS,
-        nats_retry_interval=float(_NATS_RETRY_INTERVAL),
+        nats_retry_attempts=cfg.nats_retry_attempts,
+        nats_retry_interval=float(cfg.nats_retry_interval),
     )
 
 
