@@ -13,6 +13,7 @@ import hmac as hmac_mod
 import json
 import logging
 import os
+from datetime import datetime, timezone
 
 import nats
 import pytest
@@ -20,6 +21,8 @@ from httpx import ASGITransport, AsyncClient
 
 from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
+
+_FIXED_TS = datetime(2026, 4, 22, tzinfo=timezone.utc)
 
 pytestmark = pytest.mark.integration
 
@@ -93,7 +96,7 @@ class TestPublisherIntegration:
         payload = WebhookPayload(
             event="agent.created",
             data={"host": "prod-host", "name": "my-agent"},
-            timestamp="2026-04-22T00:00:00Z",
+            timestamp=_FIXED_TS,
         )
         await publisher.publish(payload)
         await asyncio.sleep(0.1)
@@ -118,7 +121,7 @@ class TestPublisherIntegration:
         payload = WebhookPayload(
             event="task.updated",
             data={"teamId": "team-42", "task_id": "t-007"},
-            timestamp="2026-04-22T00:00:00Z",
+            timestamp=_FIXED_TS,
         )
         await publisher.publish(payload)
         await asyncio.sleep(0.1)
@@ -132,7 +135,7 @@ class TestPublisherIntegration:
         payload = WebhookPayload(
             event="agent.deleted",
             data={"host": "h1", "name": "bot"},
-            timestamp="2026-04-22T00:00:00Z",
+            timestamp=_FIXED_TS,
         )
         assert "hi.agents.h1.bot.deleted" not in publisher.active_subjects
         await publisher.publish(payload)
@@ -152,7 +155,7 @@ class TestPublisherIntegration:
         payload = WebhookPayload(
             event="agent.created",
             data={"host": "h", "name": "n"},
-            timestamp="2026-04-22T00:00:00Z",
+            timestamp=_FIXED_TS,
         )
         with pytest.raises(RuntimeError, match="not connected"):
             await pub.publish(payload)
@@ -304,7 +307,7 @@ class TestEdgeCases:
             payload = WebhookPayload(
                 event="unknown.event",
                 data={"foo": "bar"},
-                timestamp="2026-04-22T00:00:00Z",
+                timestamp=_FIXED_TS,
             )
             with pytest.raises(UnknownEventTypeError):
                 await pub.publish(payload)
@@ -329,7 +332,7 @@ class TestEdgeCases:
             WebhookPayload(
                 event="agent.created",
                 data={"host": "concurrent-host", "name": f"agent-{i}"},
-                timestamp="2026-04-22T00:00:00Z",
+                timestamp=_FIXED_TS,
             )
             for i in range(10)
         ]
@@ -361,7 +364,7 @@ class TestEdgeCases:
         payload = WebhookPayload(
             event="agent.created",
             data=large_data,
-            timestamp="2026-04-22T00:00:00Z",
+            timestamp=_FIXED_TS,
         )
         await publisher.publish(payload)
         await asyncio.sleep(0.2)

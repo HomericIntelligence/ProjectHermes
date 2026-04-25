@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
+from datetime import datetime, timezone
 
 import nats
 import pytest
@@ -15,9 +16,11 @@ from hermes.config import get_settings
 from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
 
+_FIXED_TS = datetime(2026, 4, 22, tzinfo=timezone.utc)
+
 
 @pytest.fixture(autouse=True)
-def reset_server_state() -> None:
+def reset_server_state() -> Generator[None, None, None]:
     _server._shutdown_event = asyncio.Event()
     _server._inflight = 0
     yield
@@ -43,10 +46,10 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(autouse=True)
-def reset_settings() -> None:
+def reset_settings() -> Generator[None, None, None]:
     """Clear the get_settings LRU cache before each test so mutations don't leak."""
     get_settings.cache_clear()
-    yield  # type: ignore[misc]
+    yield
     get_settings.cache_clear()
 
 
@@ -79,7 +82,7 @@ def agent_payload() -> WebhookPayload:
     return WebhookPayload(
         event="agent.created",
         data={"host": "test-host", "name": "test-agent"},
-        timestamp="2026-04-22T00:00:00Z",
+        timestamp=_FIXED_TS,
     )
 
 
@@ -88,5 +91,5 @@ def task_payload() -> WebhookPayload:
     return WebhookPayload(
         event="task.updated",
         data={"teamId": "team-1", "task_id": "task-abc"},
-        timestamp="2026-04-22T00:00:00Z",
+        timestamp=_FIXED_TS,
     )

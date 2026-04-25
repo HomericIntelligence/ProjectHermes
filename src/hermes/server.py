@@ -210,7 +210,7 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 # ---------------------------------------------------------------------------
 
 
-class RequestIDMiddleware(BaseHTTPMiddleware):
+class RequestIDMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
     """Assign a unique request ID to every incoming request.
 
     Reads ``X-Request-ID`` from the incoming headers if present (pass-through),
@@ -228,7 +228,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
-class ShutdownMiddleware(BaseHTTPMiddleware):
+class ShutdownMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
     """Reject /webhook with 503 once shutdown has been signalled.
 
     All other paths (e.g. /health) pass through so load balancers can observe

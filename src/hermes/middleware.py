@@ -14,7 +14,7 @@ from starlette.types import ASGIApp
 logger = logging.getLogger(__name__)
 
 
-class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):
+class PayloadSizeLimitMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
     """Reject requests whose body exceeds *max_bytes* with HTTP 413."""
 
     def __init__(self, app: ASGIApp, max_bytes: int = 1_048_576) -> None:
