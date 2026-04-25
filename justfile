@@ -30,10 +30,10 @@ register-webhook:
 
 # === Setup ===
 
-# One-command developer setup: copy .env, install deps
+# One-command developer setup: copy .env, install deps, regenerate lock file
 bootstrap:
     cp -n .env.example .env || true
-    pixi install
+    pixi install --frozen || pixi update
     @echo "Ready! Run 'just dev' to start."
 
 # Install pre-commit hooks into the local git repo

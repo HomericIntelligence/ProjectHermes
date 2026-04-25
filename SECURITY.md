@@ -83,6 +83,37 @@ We use the following severity levels:
 | **Medium**   | Limited impact vulnerabilities       | Standard priority  |
 | **Low**      | Minor issues, hardening              | Scheduled fix      |
 
+## Secret Rotation
+
+If a `WEBHOOK_SECRET` is compromised or needs to be rotated, follow these steps:
+
+1. **Generate a new secret**
+   ```bash
+   openssl rand -hex 32
+   ```
+
+2. **Update the deployment environment**
+   Set the new value in your deployment environment (e.g. update the `WEBHOOK_SECRET`
+   variable in your `.env` file, secrets manager, or container orchestration platform).
+
+3. **Restart the service**
+   ```bash
+   just start
+   # or, in Docker:
+   docker compose up --build -d
+   ```
+
+4. **Verify the service is healthy**
+   ```bash
+   just health
+   ```
+   The `/health` endpoint should return `{"status": "ok"}` with a 200 response.
+
+5. **Update the secret in external services**
+   Reconfigure each external service (GitHub, Slack, etc.) that sends signed webhook
+   payloads to use the new secret. Until this is done, those webhooks will be rejected
+   with a 401 Unauthorized response.
+
 ## Responsible Disclosure
 
 We follow responsible disclosure practices:
