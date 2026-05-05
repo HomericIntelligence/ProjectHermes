@@ -70,35 +70,80 @@ class Publisher:
         self._connected: bool = False
         self.reconnect_count: int = 0
         self.last_error: str = ""
+        self._stop_event: asyncio.Event = asyncio.Event()
+        self._reconnect_task: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
+    async def _on_disconnected(self) -> None:
+        """Callback invoked by nats-py when the connection is lost."""
+        self._connected = False
+        self.last_error = "NATS disconnected"
+        logger.warning("NATS disconnected")
+
+    async def _on_reconnected(self) -> None:
+        """Callback invoked after a successful reconnect."""
+        self._connected = True
+        self.reconnect_count += 1
+        logger.info("NATS reconnected (count=%d)", self.reconnect_count)
+
     async def connect(self, url: str, connect_timeout: float = 5.0) -> None:
         """Connect to the NATS server, obtain JetStream context, and ensure streams exist."""
-
-        async def _on_disconnected() -> None:
-            self._connected = False
-            self.last_error = "NATS disconnected"
-            logger.warning("NATS disconnected")
-
-        async def _on_reconnected() -> None:
-            self._connected = True
-            self.reconnect_count += 1
-            logger.info("NATS reconnected (count=%d)", self.reconnect_count)
-
         self._nc = await nats.connect(
             url,
             allow_reconnect=False,
             connect_timeout=connect_timeout,
-            disconnected_cb=_on_disconnected,
-            reconnected_cb=_on_reconnected,
+            disconnected_cb=self._on_disconnected,
+            reconnected_cb=self._on_reconnected,
         )
         self._connected = True
         self._js = self._nc.jetstream()
         await self._ensure_streams()
+        self._stop_event.clear()
+        self._reconnect_task = asyncio.create_task(
+            self._reconnect_loop(url, connect_timeout), name="nats-reconnect-loop"
+        )
         logger.info("Connected to NATS at %s", url)
+
+    async def _reconnect_loop(self, url: str, connect_timeout: float) -> None:
+        """Poll for connection loss and re-establish the NATS connection when dropped.
+
+        Runs as a background task.  Exits cleanly when _stop_event is set.
+        Uses interruptible sleep so shutdown is not delayed by the poll interval.
+        """
+        from hermes.config import get_settings
+
+        poll_interval = get_settings().nats_retry_interval
+        while not self._stop_event.is_set():
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=poll_interval)
+                return  # stop event fired during sleep
+            except asyncio.TimeoutError:
+                pass
+
+            if self._nc is None or not self._nc.is_closed:
+                continue
+
+            logger.warning("NATS connection lost; attempting reconnect")
+            try:
+                nc = await asyncio.wait_for(
+                    nats.connect(
+                        url,
+                        allow_reconnect=False,
+                        connect_timeout=connect_timeout,
+                        disconnected_cb=self._on_disconnected,
+                        reconnected_cb=self._on_reconnected,
+                    ),
+                    timeout=connect_timeout + 1.0,
+                )
+                self._nc = nc
+                self._js = nc.jetstream()
+                await self._on_reconnected()
+            except Exception as exc:
+                logger.warning("NATS reconnect failed: %s", exc)
+                self.last_error = str(exc)
 
     async def _ensure_streams(self) -> None:
         """Create JetStream streams if they don't exist yet."""
@@ -122,6 +167,14 @@ class Publisher:
 
     async def disconnect(self) -> None:
         """Drain and close the NATS connection."""
+        self._stop_event.set()
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except asyncio.CancelledError:
+                pass
+            self._reconnect_task = None
         if self._nc is not None:
             await self._nc.drain()
             self._nc = None
