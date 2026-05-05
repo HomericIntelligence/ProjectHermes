@@ -97,6 +97,12 @@ docker-up:
 docker-down:
     docker compose down
 
+# === Documentation ===
+
+# Regenerate the committed OpenAPI spec (openapi.json) from the FastAPI app
+export-openapi:
+    pixi run python scripts/export-openapi.py
+
 # === Security ===
 
 # Audit dependencies for known vulnerabilities
