@@ -124,7 +124,7 @@ nats-start:
         echo "Starting NATS with Odysseus config: $ODYSSEUS_CONF"
         nats-server -c "$ODYSSEUS_CONF" &
     else
-        echo "Odysseus config not found; starting NATS with embedded defaults"
+        echo "Warning: Odysseus config not found at $ODYSSEUS_CONF — starting NATS with embedded defaults" >&2
         nats-server \
             --jetstream \
             --store_dir /tmp/nats-hermes \
