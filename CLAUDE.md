@@ -97,6 +97,10 @@ Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webho
    hyphens, dots become hyphens, and wildcards (`*` and `>`) are stripped entirely. Tokens are
    lowercased and subject strings are typically capped at 64 characters.
 
+## CI/CD
+
+Docker images are published to GHCR (`ghcr.io/<org>/projecthermes`) **only on version tags** matching `v*.*.*` and via manual `workflow_dispatch`. Merges to `main` do **not** trigger a publish. To release a new image, push a semver tag (e.g. `git tag v1.2.3 && git push origin v1.2.3`).
+
 ## Common Commands
 
 ```bash
