@@ -39,3 +39,9 @@ ACTIVE_SUBJECTS: Gauge = Gauge(
     "hermes_active_subjects_count",
     "Number of distinct NATS subjects that have been published to",
 )
+
+NATS_RECONNECTS: Counter = Counter(
+    "hermes_nats_reconnects_total",
+    "Total number of external NATS reconnect attempts",
+    ["result"],
+)

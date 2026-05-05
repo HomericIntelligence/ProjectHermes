@@ -18,6 +18,7 @@ from nats.js import JetStreamContext
 from hermes.metrics import (
     ACTIVE_SUBJECTS,
     DEAD_LETTERS,
+    NATS_RECONNECTS,
     PUBLISH_LATENCY,
     WEBHOOKS_PUBLISHED,
 )
@@ -70,13 +71,32 @@ class Publisher:
         self._connected: bool = False
         self.reconnect_count: int = 0
         self.last_error: str = ""
+        self._stop_event: asyncio.Event = asyncio.Event()
+        self._reconnect_task: asyncio.Task[None] | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     async def connect(self, url: str, connect_timeout: float = 5.0) -> None:
-        """Connect to the NATS server, obtain JetStream context, and ensure streams exist."""
+        """Connect to NATS, ensure streams exist, and start the background reconnect loop."""
+        from hermes.config import get_settings
+
+        settings = get_settings()
+        await self._connect_internal(url, connect_timeout)
+        logger.info("Connected to NATS at %s", url)
+        self._stop_event = asyncio.Event()
+        self._reconnect_task = asyncio.ensure_future(
+            self._reconnect_loop(
+                url,
+                connect_timeout,
+                settings.nats_reconnect_interval,
+                settings.nats_reconnect_hard_timeout,
+            )
+        )
+
+    async def _connect_internal(self, url: str, connect_timeout: float) -> None:
+        """Low-level connect: open the NATS socket, register callbacks, get JetStream context."""
 
         async def _on_disconnected() -> None:
             self._connected = False
@@ -98,7 +118,37 @@ class Publisher:
         self._connected = True
         self._js = self._nc.jetstream()
         await self._ensure_streams()
-        logger.info("Connected to NATS at %s", url)
+
+    async def _reconnect_loop(
+        self,
+        url: str,
+        connect_timeout: float,
+        reconnect_interval: float,
+        hard_timeout: float,
+    ) -> None:
+        """Background task: detect NATS connection loss and attempt to reconnect."""
+        while not self._stop_event.is_set():
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=reconnect_interval)
+                return  # stop_event fired during sleep
+            except asyncio.TimeoutError:
+                pass
+            if self._stop_event.is_set():
+                return
+            if self._nc is not None and not self._nc.is_closed:
+                continue  # connection still alive
+            logger.warning("NATS connection lost; attempting reconnect")
+            try:
+                await asyncio.wait_for(
+                    self._connect_internal(url, connect_timeout), timeout=hard_timeout
+                )
+                self.reconnect_count += 1
+                NATS_RECONNECTS.labels(result="success").inc()
+                logger.info("NATS reconnected via external loop (count=%d)", self.reconnect_count)
+            except Exception as exc:
+                self.last_error = str(exc)
+                NATS_RECONNECTS.labels(result="failed").inc()
+                logger.error("NATS reconnect failed: %s", exc)
 
     async def _ensure_streams(self) -> None:
         """Create JetStream streams if they don't exist yet."""
@@ -121,7 +171,15 @@ class Publisher:
                 self._stream_names.append(name)
 
     async def disconnect(self) -> None:
-        """Drain and close the NATS connection."""
+        """Stop the reconnect loop, drain, and close the NATS connection."""
+        self._stop_event.set()
+        if self._reconnect_task is not None:
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._reconnect_task = None
         if self._nc is not None:
             await self._nc.drain()
             self._nc = None

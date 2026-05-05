@@ -71,6 +71,8 @@ Every message published to NATS JetStream includes a `schema_version` integer fi
 | MAX_PAYLOAD_BYTES     | 1048576                        | Maximum accepted request body size in bytes (1 MB)      |
 | NATS_CONNECT_TIMEOUT  | 5.0                            | NATS connection timeout in seconds                      |
 | NATS_PUBLISH_TIMEOUT  | 5.0                            | NATS publish timeout in seconds                         |
+| NATS_RECONNECT_INTERVAL | 5.0                          | Seconds between external reconnect attempts             |
+| NATS_RECONNECT_HARD_TIMEOUT | 5.0                      | Per-attempt hard timeout for external reconnect (seconds) |
 | AGAMEMNON_URL         |                                | Base URL of the Agamemnon coordination service          |
 | AGAMEMNON_API_KEY     |                                | API key for authenticating with Agamemnon               |
 | AGAMEMNON_TIMEOUT     | 10.0                           | Agamemnon API call timeout in seconds                   |
