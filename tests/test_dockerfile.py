@@ -1,7 +1,8 @@
-"""Regression tests ensuring the Dockerfile uses pinned/versioned pip dependencies."""
+"""Regression tests ensuring the Dockerfile uses pinned/versioned pip dependencies and signal forwarding."""
 
 from __future__ import annotations
 
+import pathlib
 import re
 import tomllib
 from pathlib import Path
@@ -9,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 DOCKERFILE = ROOT / "Dockerfile"
 PYPROJECT = ROOT / "pyproject.toml"
+_DOCKERFILE = pathlib.Path(__file__).parent.parent / "Dockerfile"
 
 _VERSION_SPEC_RE = re.compile(r"[><=!~]")
 _PIP_INSTALL_RE = re.compile(r"pip install\b")
@@ -93,3 +95,36 @@ def test_dockerfile_no_bare_unversioned_pip_packages() -> None:
             assert _VERSION_SPEC_RE.search(base), (
                 f"Dockerfile has unversioned package '{token}' in pip install line: {line!r}"
             )
+
+
+class TestDockerfileTini:
+    def test_tini_installed(self) -> None:
+        lines = _dockerfile_lines()
+        assert any("tini" in line for line in lines), \
+            "Dockerfile must install tini for PID-1 signal forwarding"
+
+    def test_entrypoint_uses_tini(self) -> None:
+        lines = _dockerfile_lines()
+        entrypoint_lines = [ln for ln in lines if ln.strip().startswith("ENTRYPOINT")]
+        assert entrypoint_lines, "Dockerfile must have an ENTRYPOINT directive"
+        assert "tini" in entrypoint_lines[-1], \
+            'ENTRYPOINT must use tini (e.g. ENTRYPOINT ["tini", "--"])'
+
+    def test_cmd_preserved(self) -> None:
+        lines = _dockerfile_lines()
+        cmd_lines = [ln for ln in lines if ln.startswith("CMD")]
+        assert cmd_lines, "Dockerfile must retain a CMD directive"
+        assert "hermes.server" in cmd_lines[-1], \
+            "CMD must still launch the hermes server"
+
+    def test_entrypoint_before_cmd(self) -> None:
+        lines = _dockerfile_lines()
+        entrypoint_idx = next(
+            (i for i, ln in enumerate(lines) if ln.startswith("ENTRYPOINT")), -1
+        )
+        cmd_idx = next(
+            (i for i, ln in enumerate(lines) if ln.startswith("CMD")), -1
+        )
+        assert entrypoint_idx != -1, "ENTRYPOINT not found"
+        assert cmd_idx != -1, "CMD not found"
+        assert entrypoint_idx < cmd_idx, "ENTRYPOINT must appear before CMD"
