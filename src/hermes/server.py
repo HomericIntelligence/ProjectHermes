@@ -376,7 +376,7 @@ async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcc
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unknown event type: {exc}",
         ) from exc
-    return WebhookAcceptedResponse(status="accepted", event=payload.event)
+    return WebhookAcceptedResponse(status="accepted", event=payload.event, request_id=request_id)
 
 
 @app.get(
