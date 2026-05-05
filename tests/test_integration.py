@@ -8,8 +8,6 @@ cannot be reached at TEST_NATS_URL (default nats://localhost:4222).
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac as hmac_mod
 import json
 import logging
 import os
@@ -22,6 +20,8 @@ from httpx import ASGITransport, AsyncClient
 from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
 
+from tests.helpers import sign_body
+
 _FIXED_TS = datetime(2026, 4, 22, tzinfo=timezone.utc)
 
 pytestmark = pytest.mark.integration
@@ -31,7 +31,7 @@ _TEST_SECRET = "integration-test-secret-for-hermes-webhook"
 
 
 def _sign(body: bytes) -> str:
-    return hmac_mod.new(_TEST_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    return sign_body(body, _TEST_SECRET)
 
 
 # ---------------------------------------------------------------------------

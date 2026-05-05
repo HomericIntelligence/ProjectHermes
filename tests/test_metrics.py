@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac as hmac_mod
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-_TEST_SECRET = "test-webhook-secret-padding-xxxxx"
+from tests.helpers import TEST_SECRET, sign_body
+
+_TEST_SECRET = TEST_SECRET
 
 
 def _sign(body: bytes) -> str:
-    return hmac_mod.new(_TEST_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    return sign_body(body, _TEST_SECRET)
 
 
 def _build_client(dead_letters: list | None = None) -> TestClient:
