@@ -1,0 +1,12 @@
+- name: tech-debt
+  color: "e4e669"
+  description: "Known technical debt items to address in future sprints"
+- name: roadmap
+  color: "0075ca"
+  description: "Tracks planned features and phased delivery"
+- name: chore
+  color: "fef2c0"
+  description: "Maintenance tasks with no user-visible impact"
+- name: cleanup
+  color: "c5def5"
+  description: "Code or config cleanup"
