@@ -1018,3 +1018,72 @@ class TestStartupBanner:
         assert nats_url in log_text or "nats_url=" in log_text
         # NATS connectivity status
         assert "connected=" in log_text
+
+
+# ---------------------------------------------------------------------------
+# Issue #221: Full HTTP POST → HMAC → NATS JetStream ACK integration test
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestJetStreamAck:
+    """Verify the full path: HTTP POST → HMAC validation → JetStream publish → ACK."""
+
+    async def test_webhook_delivers_jetstream_ack(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        nats_url: str,
+        nats_client: nats.aio.client.Client,
+    ) -> None:
+        """POST /webhook → HMAC check → Publisher.publish → JetStream ACK succeeds."""
+        from hermes.server import app
+
+        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("NATS_URL", nats_url)
+
+        js = nats_client.jetstream()
+
+        pub = Publisher()
+        await pub.connect(nats_url)
+        app.state.publisher = pub
+
+        try:
+            sub = await js.pull_subscribe(
+                "hi.agents.js-ack-host.js-ack-agent.created",
+                durable="test-ack-consumer-221",
+                stream="homeric-agents",
+            )
+
+            payload = {
+                "event": "agent.created",
+                "data": {"host": "js-ack-host", "name": "js-ack-agent"},
+                "timestamp": "2026-04-22T00:00:00Z",
+            }
+            body_bytes = json.dumps(payload).encode()
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/webhook",
+                    content=body_bytes,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Webhook-Signature": _sign(body_bytes),
+                    },
+                )
+            assert response.status_code == 202
+
+            msgs = await sub.fetch(batch=1, timeout=5)
+            assert len(msgs) == 1
+            msg = msgs[0]
+
+            assert msg.subject == "hi.agents.js-ack-host.js-ack-agent.created"
+            body = json.loads(msg.data)
+            assert body["event"] == "agent.created"
+            assert body["schema_version"] == 1
+            assert "request_id" in body
+
+            await msg.ack()
+        finally:
+            await pub.disconnect()
