@@ -103,6 +103,10 @@ export-openapi:
 audit:
     pixi run pip-audit
 
+# Check that [project.dependencies] in pyproject.toml has upper bounds on all entries
+dep-check:
+    pixi run python scripts/check_dep_sync.py
+
 # Scan repository for leaked secrets (requires gitleaks binary)
 scan-secrets:
     #!/usr/bin/env bash
