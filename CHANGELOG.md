@@ -53,7 +53,7 @@ webhooks to NATS JetStream for the HomericIntelligence ecosystem.
   validation, and subject routing (`hi.agents.*` / `hi.tasks.*`)
 - Dockerfile for container builds; non-root user execution
 - `just` command runner integration: `just dev`, `just test`, `just lint`, `just format`,
-  `just health`, `just nats-start`, `just register-webhook`
+  `just health`, `just nats-start`
 - CI pipeline with ruff linting, mypy type checking, coverage reporting, and Docker build
 - LICENSE (MIT), SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md
 

@@ -22,12 +22,6 @@ dev:
 health:
     curl -s http://localhost:{{HERMES_PORT}}/health | python3 -m json.tool
 
-# === Integration ===
-
-# Point external services at POST /webhook directly
-register-webhook:
-    bash scripts/register-webhooks.sh
-
 # === Setup ===
 
 # One-command developer setup: copy .env, install deps, regenerate lock file

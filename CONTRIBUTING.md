@@ -163,8 +163,6 @@ just nats-start
 # Check health endpoint
 just health
 
-# Register a test webhook
-just register-webhook
 ```
 
 ### Python Conventions
