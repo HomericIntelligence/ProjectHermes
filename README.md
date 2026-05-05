@@ -115,6 +115,32 @@ Hermes exposes several endpoints for webhooks, health checks, and observability:
 - **`/ready`** returns `200 OK` when ready to accept webhooks (NATS connected),
   `503 Service Unavailable` otherwise. Use for Kubernetes readiness probes.
 
+## API Documentation
+
+The committed OpenAPI 3.x specification is at [`openapi.json`](openapi.json) in the repository
+root. It is generated from the live FastAPI app and kept in sync with each release.
+
+To regenerate it locally:
+
+```bash
+just export-openapi
+```
+
+FastAPI also serves interactive docs at runtime:
+
+- Swagger UI: `http://localhost:<HERMES_PORT>/docs`
+- ReDoc: `http://localhost:<HERMES_PORT>/redoc`
+
+## Architecture Decisions
+
+Hermes-specific architectural decisions are documented as ADRs in [`docs/adr/`](docs/adr/).
+
+| ADR | Decision |
+|-----|----------|
+| [ADR-001](docs/adr/ADR-001-nats-reconnect-strategy.md) | `allow_reconnect=False` — fail fast on NATS disconnect rather than buffering silently |
+| [ADR-002](docs/adr/ADR-002-dead-letter-strategy.md) | Route unknown event types to `hi.deadletter.<event>` JetStream subject |
+| [ADR-003](docs/adr/ADR-003-schema-version-field.md) | Include `schema_version` integer in every wire-format message |
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in values:
