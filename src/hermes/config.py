@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     shutdown_timeout: float = Field(default=10.0, gt=0)
     max_payload_bytes: int = 1_048_576
     enable_dead_letter: bool = True
+    dead_letter_max_size: int = Field(default=1000, ge=1)
+    dead_letter_ttl_seconds: int = Field(default=86400, ge=0)
+    dead_letter_alert_threshold: float = Field(default=0.8, gt=0, le=1.0)
+    dead_letter_page_size_default: int = Field(default=100, ge=1)
+    dead_letter_page_size_max: int = Field(default=500, ge=1)
     log_json: bool = False
     active_subjects_max: int = 1000
     webhook_rate_limit: str = "60/minute"

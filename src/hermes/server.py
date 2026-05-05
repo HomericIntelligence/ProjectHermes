@@ -432,21 +432,32 @@ async def metrics() -> Response:
 
 @app.get("/dead-letters", response_model=DeadLettersResponse)
 async def dead_letters(
-    limit: int | None = None,
     offset: int = 0,
+    limit: int | None = None,
     _: None = Depends(_require_dead_letter_key),
 ) -> DeadLettersResponse:
     """Return the in-memory dead-letter queue with optional pagination.
 
     Query params:
     - ``offset``: number of items to skip (default 0).
-    - ``limit``: maximum number of items to return (default: all).
+    - ``limit``: maximum items to return (default: ``dead_letter_page_size_default``;
+      hard ceiling: ``dead_letter_page_size_max``).
     """
+    settings = get_settings()
+    effective_limit: int = limit if limit is not None else settings.dead_letter_page_size_default
+    if effective_limit > settings.dead_letter_page_size_max:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"limit must not exceed {settings.dead_letter_page_size_max}; "
+                f"got {effective_limit}"
+            ),
+        )
     publisher: Publisher = app.state.publisher
     all_items = publisher.dead_letters
     total = len(all_items)
-    sliced = all_items[offset:] if limit is None else all_items[offset : offset + limit]
-    return DeadLettersResponse(total=total, offset=offset, limit=limit, items=sliced)
+    sliced = all_items[offset : offset + effective_limit]
+    return DeadLettersResponse(total=total, offset=offset, limit=effective_limit, items=sliced)
 
 
 @app.delete("/dead-letters", status_code=status.HTTP_200_OK)

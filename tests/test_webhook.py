@@ -699,7 +699,7 @@ class TestDeadLettersGetEndpoint:
         body = client.get("/dead-letters").json()
         assert body["total"] == 0
         assert body["offset"] == 0
-        assert body["limit"] is None
+        assert body["limit"] is not None  # default page size is applied
         assert body["items"] == []
 
     def test_dead_letters_returns_all_by_default(self) -> None:
@@ -708,7 +708,7 @@ class TestDeadLettersGetEndpoint:
         body = client.get("/dead-letters").json()
         assert body["total"] == 5
         assert len(body["items"]) == 5
-        assert body["limit"] is None
+        assert body["limit"] is not None  # default page size is applied
 
     def test_dead_letters_limit_param(self) -> None:
         items = [{"event": f"evt.{i}", "subject": f"hi.deadletter.evt-{i}"} for i in range(10)]
