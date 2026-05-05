@@ -14,7 +14,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -203,6 +203,25 @@ async def _http_exception_handler_with_request_id(
 # ---------------------------------------------------------------------------
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+async def _require_dead_letter_key(
+    settings: SettingsDep,
+    x_dead_letter_key: str = Header(default=""),
+) -> None:
+    """Enforce API key auth for dead-letter endpoints.
+
+    When ``dead_letter_api_key`` is unset the check is bypassed (opt-in).
+    A timing-safe comparison prevents key enumeration via response timing.
+    """
+    if not settings.dead_letter_api_key:
+        return
+    if not x_dead_letter_key or not hmac.compare_digest(x_dead_letter_key, settings.dead_letter_api_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing dead-letter API key",
+            headers={"WWW-Authenticate": 'Bearer realm="hermes"'},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +423,7 @@ async def metrics() -> Response:
 async def dead_letters(
     limit: int | None = None,
     offset: int = 0,
+    _: None = Depends(_require_dead_letter_key),
 ) -> DeadLettersResponse:
     """Return the in-memory dead-letter queue with optional pagination.
 
@@ -419,7 +439,9 @@ async def dead_letters(
 
 
 @app.delete("/dead-letters", status_code=status.HTTP_200_OK)
-async def drain_dead_letters() -> dict[str, int]:
+async def drain_dead_letters(
+    _: None = Depends(_require_dead_letter_key),
+) -> dict[str, int]:
     """Drain (clear) the in-memory dead-letter queue and return the count of drained items."""
     publisher: Publisher = app.state.publisher
     drained = publisher.drain_dead_letters()

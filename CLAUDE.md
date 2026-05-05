@@ -74,6 +74,7 @@ Every message published to NATS JetStream includes a `schema_version` integer fi
 | AGAMEMNON_URL         |                                | Base URL of the Agamemnon coordination service          |
 | AGAMEMNON_API_KEY     |                                | API key for authenticating with Agamemnon               |
 | AGAMEMNON_TIMEOUT     | 10.0                           | Agamemnon API call timeout in seconds                   |
+| DEAD_LETTER_API_KEY   |                                | API key for GET/DELETE /dead-letters (min 32 chars; auth bypassed when unset) |
 | SHUTDOWN_TIMEOUT      | 10.0                           | Graceful shutdown timeout in seconds                    |
 
 Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webhook`.

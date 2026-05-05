@@ -801,6 +801,131 @@ class TestDeadLettersDeleteEndpoint:
         mock_publisher.drain_dead_letters.assert_called_once()
 
 
+_DEAD_LETTER_KEY = "dead-letter-api-key-for-testing-xxxxx"
+
+
+class TestDeadLettersGetAuth:
+    """Tests for GET /dead-letters API key authentication (issue #344)."""
+
+    def _build_client(self, *, key: str) -> TestClient:
+        from hermes.config import get_settings
+        from hermes.publisher import Publisher
+        from hermes.server import app
+
+        mock_publisher = MagicMock(spec=Publisher)
+        mock_publisher.is_connected = True
+        mock_publisher.active_subjects = []
+        mock_publisher.publish = AsyncMock()
+        mock_publisher.dead_letters = []
+        app.state.publisher = mock_publisher
+        get_settings().dead_letter_api_key = key
+        return TestClient(app, raise_server_exceptions=True)
+
+    def teardown_method(self) -> None:
+        from hermes.config import get_settings
+
+        get_settings().dead_letter_api_key = ""
+
+    def test_correct_key_returns_200(self) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY)
+        resp = client.get("/dead-letters", headers={"X-Dead-Letter-Key": _DEAD_LETTER_KEY})
+        assert resp.status_code == 200
+
+    def test_wrong_key_returns_401(self) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY)
+        resp = client.get("/dead-letters", headers={"X-Dead-Letter-Key": "wrong-key"})
+        assert resp.status_code == 401
+
+    def test_missing_key_returns_401(self) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY)
+        resp = client.get("/dead-letters")
+        assert resp.status_code == 401
+
+    def test_no_key_configured_bypasses_auth(self) -> None:
+        client = self._build_client(key="")
+        resp = client.get("/dead-letters")
+        assert resp.status_code == 200
+
+    def test_401_has_www_authenticate_header(self) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY)
+        resp = client.get("/dead-letters")
+        assert resp.status_code == 401
+        assert "WWW-Authenticate" in resp.headers
+
+
+class TestDeadLettersDeleteAuth:
+    """Tests for DELETE /dead-letters API key authentication (issue #344)."""
+
+    def _build_client(self, *, key: str) -> TestClient:
+        from hermes.config import get_settings
+        from hermes.publisher import Publisher
+        from hermes.server import app
+
+        mock_publisher = MagicMock(spec=Publisher)
+        mock_publisher.is_connected = True
+        mock_publisher.active_subjects = []
+        mock_publisher.publish = AsyncMock()
+        mock_publisher.drain_dead_letters = MagicMock(return_value=0)
+        app.state.publisher = mock_publisher
+        get_settings().dead_letter_api_key = key
+        return TestClient(app, raise_server_exceptions=True)
+
+    def teardown_method(self) -> None:
+        from hermes.config import get_settings
+
+        get_settings().dead_letter_api_key = ""
+
+    def test_correct_key_returns_200(self) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY)
+        resp = client.delete("/dead-letters", headers={"X-Dead-Letter-Key": _DEAD_LETTER_KEY})
+        assert resp.status_code == 200
+
+    def test_wrong_key_returns_401(self) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY)
+        resp = client.delete("/dead-letters", headers={"X-Dead-Letter-Key": "wrong-key"})
+        assert resp.status_code == 401
+
+    def test_missing_key_returns_401(self) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY)
+        resp = client.delete("/dead-letters")
+        assert resp.status_code == 401
+
+    def test_no_key_configured_bypasses_auth(self) -> None:
+        client = self._build_client(key="")
+        resp = client.delete("/dead-letters")
+        assert resp.status_code == 200
+
+    def test_401_has_www_authenticate_header(self) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY)
+        resp = client.delete("/dead-letters")
+        assert resp.status_code == 401
+        assert "WWW-Authenticate" in resp.headers
+
+
+class TestDeadLetterApiKeyValidation:
+    """Tests for DEAD_LETTER_API_KEY config validation (issue #344)."""
+
+    def test_key_shorter_than_32_chars_raises(self) -> None:
+        from pydantic import ValidationError
+
+        from hermes.config import Settings
+
+        with pytest.raises(ValidationError, match="32 characters"):
+            Settings(dead_letter_api_key="short")
+
+    def test_key_exactly_32_chars_is_valid(self) -> None:
+        from hermes.config import Settings
+
+        s = Settings(dead_letter_api_key="a" * 32)
+        assert len(s.dead_letter_api_key) == 32
+
+    def test_empty_key_is_valid(self) -> None:
+        from hermes.config import Settings
+
+        s = Settings(dead_letter_api_key="")
+        assert s.dead_letter_api_key == ""
+
+
 class TestPublisherDrainDeadLetters:
     """Unit tests for Publisher.drain_dead_letters."""
 
