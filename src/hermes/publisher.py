@@ -248,7 +248,7 @@ class Publisher:
                     )
                     await asyncio.sleep(delay)
 
-        raise last_exc  # type: ignore[misc]
+        raise last_exc or RuntimeError("unreachable")
 
     def _track_subject(self, subject: str) -> None:
         """Add subject to the LRU OrderedDict, evicting the oldest if at capacity."""
