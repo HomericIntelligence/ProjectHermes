@@ -21,11 +21,24 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
 
       - uses: prefix-dev/setup-pixi@v0.9.5
         with:
           pixi-version: v0.67.2
           cache: true
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
+      - name: Run pre-commit
+        run: pixi run pre-commit run --all-files --show-diff-on-failure
 
       - name: Lint
         run: pixi run lint
@@ -180,10 +193,8 @@ jobs:
           cache: true
 
       - name: Dependency scan (pip-audit)
-        # GHSA-58qw-9mgm-455v: pip<=26.0.1 tar/ZIP handling; pip is a build tool, not
-        # application code. Suppressed until pixi.lock is regenerated with pip>=26.1.0.
         run: |
-          pixi run pip-audit --ignore-vuln GHSA-58qw-9mgm-455v >> $GITHUB_STEP_SUMMARY
+          pixi run pip-audit >> $GITHUB_STEP_SUMMARY
 
   security-secrets-scan:
     name: security/secrets-scan

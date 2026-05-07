@@ -183,27 +183,6 @@ just health
 3. Implement your changes
 4. Run `just test` and `just lint` to verify
 
-### Updating CHANGELOG
-
-For all non-trivial changes (new features, bug fixes, breaking changes):
-
-1. Update `CHANGELOG.md` in the root directory
-2. Add an entry under the `[Unreleased]` section following [Keep a Changelog](https://keepachangelog.com/) format
-3. Group changes by type: Added, Changed, Fixed, Deprecated, Removed, Security
-4. Include the issue number in parentheses (e.g., `(#123)`)
-
-**Example:**
-
-```markdown
-## [Unreleased]
-
-### Added
-- Rate limiting for webhook endpoint (#175)
-
-### Fixed
-- NATS connection retry logic (#123)
-```
-
 ### Creating Your Pull Request
 
 ```bash
@@ -216,7 +195,6 @@ gh pr create --title "[Type] Brief description" --body "Closes #<issue-number>"
 - PR must be linked to a GitHub issue
 - PR title should be clear and descriptive
 - Tests and linting must pass
-- CHANGELOG.md updated (for features, fixes, and breaking changes)
 
 ### Branching Strategy
 
