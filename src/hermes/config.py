@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     webhook_rate_limit_key: str = "ip"
     publish_retries: int = Field(default=3, ge=1)
     publish_retry_base_delay: float = Field(default=0.1, gt=0)
+    nats_reconnect_interval: float = Field(default=5.0, gt=0)
+    nats_reconnect_hard_timeout: float = Field(default=5.0, gt=0)
 
     @field_validator("hermes_public_url", mode="before")
     @classmethod
