@@ -232,6 +232,12 @@ just lint       # ruff check
 just format     # ruff format
 ```
 
+## Multi-Agent Coordination
+
+For AI agents producing or consuming Hermes events, see [AGENTS.md](AGENTS.md). It covers the
+HTTP inbound interface, NATS subject patterns, wire format, downstream consumer roles, and coding
+conventions for agents working in this repository.
+
 ## Security
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md). Do not open public issues for security vulnerabilities.

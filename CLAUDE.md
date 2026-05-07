@@ -6,6 +6,9 @@ ProjectHermes is a lightweight Python service that bridges external webhooks to 
 It sits at the boundary of the HomericIntelligence mesh, translating HTTP webhook payloads
 from external services (GitHub, Slack, third-party APIs) into durable, replayable NATS messages.
 
+> **Multi-agent coordination:** See [AGENTS.md](AGENTS.md) for inter-service handoff protocols,
+> agent roles, NATS subject schemas, and wire format details for AI agents operating in this mesh.
+
 ## Architecture
 
 ```
