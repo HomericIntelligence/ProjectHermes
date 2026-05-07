@@ -1,6 +1,8 @@
 FROM python:3.12-slim AS builder
 WORKDIR /build
-RUN pip install --no-cache-dir fastapi "uvicorn[standard]" nats-py "pydantic>=2.0" pydantic-settings httpx prometheus_client \
+COPY pyproject.toml .
+RUN pip install --no-cache-dir \
+    $(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print(' '.join(repr(s) for s in d['project']['dependencies']))") \
     --target /build/deps
 
 FROM python:3.12-slim
