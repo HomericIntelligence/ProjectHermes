@@ -319,7 +319,17 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: fd906a0e0d036b2d0809894088b95b6b24f8601c9d9a881223736f05113a5e26
+  sha256: 6676febc3f248c313df16c311d64a245b70ad8002b1e433a010c22af72317f6a
+  requires_dist:
+  - fastapi>=0.115,<1
+  - uvicorn[standard]>=0.30,<1
+  - nats-py>=2.9,<3
+  - pydantic>=2.0,<3
+  - pydantic-settings>=2.0,<3
+  - httpx>=0.27,<1
+  - slowapi>=0.1,<1
+  - limits>=3.0,<4
+  - prometheus-client>=0.20,<1
   requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl
   name: httpcore
