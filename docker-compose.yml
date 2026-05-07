@@ -15,20 +15,27 @@ services:
   hermes:
     build: .
     ports:
-      - "${HERMES_PORT:-8080}:8080"
+      - "${HERMES_PORT:-8085}:8085"
     environment:
       - NATS_URL=nats://nats:4222
-      - HERMES_PORT=8080
+      - HERMES_PORT=8085
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
     depends_on:
       nats:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/ready"]
+      test: ["CMD", "curl", "-f", "http://localhost:8085/ready"]
       interval: 30s
       timeout: 5s
       start_period: 10s
       retries: 3
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   nats-data:

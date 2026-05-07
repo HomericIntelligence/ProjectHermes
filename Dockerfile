@@ -15,6 +15,7 @@ USER hermes
 ENV HERMES_HOST=0.0.0.0
 ENV HERMES_PORT=8085
 ENV HERMES_PUBLIC_URL=http://localhost:8085
+ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8085
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
