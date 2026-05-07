@@ -100,7 +100,7 @@ Hermes exposes several endpoints for webhooks, health checks, and observability:
 
 | Endpoint         | Method | Description                                                                         | Status Code |
 |------------------|--------|-------------------------------------------------------------------------------------| ----------- |
-| `/webhook`       | POST   | Accept and validate incoming webhooks; publishes to NATS                            | 200 / 401 / 422 |
+| `/webhook`       | POST   | Accept and validate incoming webhooks; publishes to NATS                            | 202 / 401 / 422 |
 | `/health`        | GET    | Service health check; returns NATS connection status                                | 200 / 503   |
 | `/ready`         | GET    | Readiness probe for orchestrators (Kubernetes, Docker Compose)                      | 200 / 503   |
 | `/metrics`       | GET    | Prometheus metrics (counter, gauge, histogram)                                      | 200         |
