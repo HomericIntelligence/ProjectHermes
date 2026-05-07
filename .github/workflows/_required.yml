@@ -149,14 +149,29 @@ jobs:
           cache: true
 
       - name: Unit tests (no NATS required)
-        run: pixi run pytest -m "not integration" --cov-fail-under=80
+        run: pixi run pytest -m "not integration"
+
+      - name: Per-module coverage minimums
+        run: |
+          pixi run coverage report --include="src/hermes/__init__.py" --fail-under=70
+          pixi run coverage report --include="src/hermes/__main__.py" --fail-under=95
+          pixi run coverage report --include="src/hermes/config.py" --fail-under=90
+          pixi run coverage report --include="src/hermes/logging_config.py" --fail-under=90
+          pixi run coverage report --include="src/hermes/metrics.py" --fail-under=95
+          pixi run coverage report --include="src/hermes/middleware.py" --fail-under=80
+          pixi run coverage report --include="src/hermes/models.py" --fail-under=90
+          pixi run coverage report --include="src/hermes/publisher.py" --fail-under=90
+          pixi run coverage report --include="src/hermes/rate_limit.py" --fail-under=95
+          pixi run coverage report --include="src/hermes/server.py" --fail-under=90
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-html
-          path: htmlcov/
+          path: |
+            htmlcov/
+            coverage.xml
 
   integration-tests:
     name: integration-tests
