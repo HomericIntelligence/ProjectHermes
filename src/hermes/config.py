@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     agamemnon_url: str = ""
     agamemnon_api_key: str = ""
     agamemnon_timeout: float = Field(default=10.0, gt=0)
+    dead_letter_api_key: str = ""
     shutdown_timeout: float = Field(default=10.0, gt=0)
     max_payload_bytes: int = 1_048_576
     enable_dead_letter: bool = True
@@ -100,6 +101,24 @@ class Settings(BaseSettings):
                 f"WEBHOOK_SECRET must be at least {_MIN_SECRET_LENGTH} characters when set"
             )
         return v
+
+    @field_validator("dead_letter_api_key")
+    @classmethod
+    def _dead_letter_key_min_length(cls, v: str) -> str:
+        if v and len(v) < _MIN_SECRET_LENGTH:
+            raise ValueError(
+                f"DEAD_LETTER_API_KEY must be at least {_MIN_SECRET_LENGTH} characters when set"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _warn_dead_letter_key_unset(self) -> "Settings":
+        if not self.dead_letter_api_key:
+            _config_logger.warning(
+                "DEAD_LETTER_API_KEY is not set — GET /dead-letters and DELETE /dead-letters "
+                "are unauthenticated and accessible to any client that can reach Hermes."
+            )
+        return self
 
     # TLS configuration (all optional; no TLS by default)
     tls_ca_bundle: str | None = None
