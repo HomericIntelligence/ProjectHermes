@@ -214,6 +214,12 @@ class TestWebhookEndpoint:
             },
         )
         assert response.status_code == 202
+        body = response.json()
+        assert body["status"] == "accepted"
+        assert body["event"] == "agent.created"
+        assert "request_id" in body
+        assert isinstance(body["request_id"], str)
+        assert len(body["request_id"]) > 0
 
     def test_webhook_invalid_payload_returns_422(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
@@ -401,6 +407,7 @@ class TestRequestIDMiddleware:
             },
         )
         assert response.headers.get("X-Request-ID") == valid_id
+        assert response.json()["request_id"] == valid_id
 
     def test_invalid_chars_in_request_id_are_replaced_with_uuid(self) -> None:
         import uuid as uuid_mod

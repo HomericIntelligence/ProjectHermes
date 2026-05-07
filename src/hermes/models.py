@@ -77,6 +77,7 @@ class WebhookAcceptedResponse(BaseModel):
 
     status: str
     event: str
+    request_id: str
 
 
 class SubjectsResponse(BaseModel):
