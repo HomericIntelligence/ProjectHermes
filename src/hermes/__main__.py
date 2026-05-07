@@ -5,13 +5,13 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
+
+from hermes.config import get_settings
+from hermes.logging_config import setup_logging
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI arguments, falling back to environment-variable defaults."""
-    from hermes.config import get_settings
-
     settings = get_settings()
 
     parser = argparse.ArgumentParser(
@@ -48,12 +48,8 @@ def main(argv: list[str] | None = None) -> None:
     import uvicorn
 
     args = _parse_args(argv)
-
-    logging.basicConfig(
-        level=args.log_level.upper(),
-        stream=sys.stdout,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    settings = get_settings()
+    setup_logging(level=getattr(logging, args.log_level.upper()), json_format=settings.log_json)
 
     uvicorn.run(
         "hermes.server:app",

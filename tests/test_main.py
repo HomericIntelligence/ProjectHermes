@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -97,3 +98,44 @@ class TestMain:
 
         _, kwargs = mock_uvicorn.run.call_args
         assert kwargs.get("reload") is False
+
+    def test_main_calls_setup_logging(self) -> None:
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), patch(
+            "hermes.__main__.setup_logging"
+        ) as mock_setup:
+            main([])
+
+        mock_setup.assert_called_once_with(level=logging.INFO, json_format=False)
+
+    def test_main_log_json_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LOG_JSON", "true")
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), patch(
+            "hermes.__main__.setup_logging"
+        ) as mock_setup, patch("hermes.__main__.get_settings") as mock_get_settings:
+            mock_settings = MagicMock()
+            mock_settings.log_json = True
+            mock_settings.hermes_port = 8080
+            mock_get_settings.return_value = mock_settings
+            main([])
+
+        mock_setup.assert_called_once_with(level=logging.INFO, json_format=True)
+
+    def test_main_log_level_forwarded(self) -> None:
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), patch(
+            "hermes.__main__.setup_logging"
+        ) as mock_setup:
+            main(["--log-level", "debug"])
+
+        mock_setup.assert_called_once_with(level=logging.DEBUG, json_format=False)
+
+    def test_main_basicconfig_not_called(self) -> None:
+        mock_uvicorn = MagicMock()
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), patch(
+            "hermes.__main__.setup_logging"
+        ), patch("logging.basicConfig") as mock_basicconfig:
+            main([])
+
+        mock_basicconfig.assert_not_called()
