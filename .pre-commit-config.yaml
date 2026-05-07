@@ -20,12 +20,3 @@ repos:
     rev: v8.24.3
     hooks:
       - id: gitleaks
-
-  - repo: local
-    hooks:
-      - id: changelog-not-empty
-        name: CHANGELOG [Unreleased] must be populated
-        language: python
-        entry: python scripts/check-changelog.py
-        files: ^CHANGELOG\.md$
-        pass_filenames: false

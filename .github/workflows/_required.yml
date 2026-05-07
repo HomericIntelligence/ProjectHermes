@@ -193,10 +193,8 @@ jobs:
           cache: true
 
       - name: Dependency scan (pip-audit)
-        # GHSA-58qw-9mgm-455v: pip<=26.0.1 tar/ZIP handling; pip is a build tool, not
-        # application code. Suppressed until pixi.lock is regenerated with pip>=26.1.0.
         run: |
-          pixi run pip-audit --ignore-vuln GHSA-58qw-9mgm-455v >> $GITHUB_STEP_SUMMARY
+          pixi run pip-audit >> $GITHUB_STEP_SUMMARY
 
   security-secrets-scan:
     name: security/secrets-scan
