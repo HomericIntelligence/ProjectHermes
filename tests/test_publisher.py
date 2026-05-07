@@ -623,8 +623,8 @@ class TestTLSPublisherConnect:
         assert pub.is_connected is True
 
     @pytest.mark.asyncio
-    async def test_connect_passes_ssl_context_from_settings(self) -> None:
-        """Publisher.connect() passes the SSL context from Settings to nats.connect()."""
+    async def test_connect_omits_tls_kwarg_when_ssl_not_configured(self) -> None:
+        """Publisher.connect() omits the tls kwarg when no TLS settings are configured."""
         pub = Publisher()
         mock_nc = MagicMock()
         mock_nc.jetstream.return_value = MagicMock()
