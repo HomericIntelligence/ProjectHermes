@@ -299,7 +299,6 @@ async def health(response: Response) -> HealthResponse:
         timeouts=TimeoutSettings(
             nats_connect=cfg.nats_connect_timeout,
             nats_publish=cfg.nats_publish_timeout,
-            agamemnon=cfg.agamemnon_timeout,
         ),
         nats_reconnect_count=publisher.reconnect_count,
         nats_last_error=publisher.last_error,

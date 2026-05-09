@@ -165,7 +165,6 @@ cp .env.example .env
 | ACTIVE_SUBJECTS_MAX   | 1000                      | Max distinct NATS subjects to track in memory               |
 | LOG_JSON              | false                     | Enable JSON-formatted logs for structured logging           |
 | ENABLE_DEAD_LETTER    | true                      | Store unparseable events to `hi.deadletter.>` stream        |
-| AGAMEMNON_TIMEOUT     | 10.0                      | HTTP timeout for Agamemnon requests in seconds              |
 | SHUTDOWN_TIMEOUT      | 10.0                      | Grace period for graceful shutdown in seconds               |
 | TLS_CA_BUNDLE         |                           | Path to CA certificate bundle (PEM)                         |
 | TLS_CERT_FILE         |                           | Path to client TLS certificate (PEM) for mTLS               |

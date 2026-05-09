@@ -52,7 +52,6 @@ class TimeoutSettings(BaseModel):
 
     nats_connect: float
     nats_publish: float
-    agamemnon: float
 
 
 class HealthResponse(BaseModel):

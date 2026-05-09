@@ -39,9 +39,6 @@ class Settings(BaseSettings):
     nats_publish_timeout: float = Field(default=5.0, gt=0)
     nats_retry_attempts: int = Field(default=3, ge=1)
     nats_retry_interval: float = Field(default=5.0, gt=0)
-    agamemnon_url: str = ""
-    agamemnon_api_key: str = ""
-    agamemnon_timeout: float = Field(default=10.0, gt=0)
     dead_letter_api_key: str = ""
     shutdown_timeout: float = Field(default=10.0, gt=0)
     max_payload_bytes: int = 1_048_576

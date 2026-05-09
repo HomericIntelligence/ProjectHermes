@@ -25,11 +25,6 @@ class TestTimeoutSettings:
         s = Settings()
         assert s.nats_publish_timeout == 5.0
 
-    def test_agamemnon_timeout_default(self) -> None:
-        """agamemnon_timeout defaults to 10.0 seconds."""
-        s = Settings()
-        assert s.agamemnon_timeout == 10.0
-
     def test_nats_connect_timeout_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """nats_connect_timeout can be overridden via environment variable."""
         monkeypatch.setenv("NATS_CONNECT_TIMEOUT", "15.0")
@@ -41,12 +36,6 @@ class TestTimeoutSettings:
         monkeypatch.setenv("NATS_PUBLISH_TIMEOUT", "3.0")
         s = Settings()
         assert s.nats_publish_timeout == 3.0
-
-    def test_agamemnon_timeout_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """agamemnon_timeout can be overridden via environment variable."""
-        monkeypatch.setenv("AGAMEMNON_TIMEOUT", "20.0")
-        s = Settings()
-        assert s.agamemnon_timeout == 20.0
 
     def test_nats_retry_attempts_default(self) -> None:
         """nats_retry_attempts defaults to 3."""
@@ -179,15 +168,5 @@ class TestTimeoutValidation:
 
     def test_nats_publish_timeout_rejects_negative(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("NATS_PUBLISH_TIMEOUT", "-5")
-        with pytest.raises(ValidationError):
-            Settings()
-
-    def test_agamemnon_timeout_rejects_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("AGAMEMNON_TIMEOUT", "0")
-        with pytest.raises(ValidationError):
-            Settings()
-
-    def test_agamemnon_timeout_rejects_negative(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("AGAMEMNON_TIMEOUT", "-0.1")
         with pytest.raises(ValidationError):
             Settings()

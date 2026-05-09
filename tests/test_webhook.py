@@ -105,7 +105,6 @@ class TestHealthEndpoint:
         assert "timeouts" in body
         assert body["timeouts"]["nats_connect"] > 0
         assert body["timeouts"]["nats_publish"] > 0
-        assert body["timeouts"]["agamemnon"] > 0
 
     def test_health_includes_dead_letter_count(self) -> None:
         client = _build_client()
