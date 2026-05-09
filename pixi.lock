@@ -543,7 +543,7 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: 89642dc5cb3dac954d3f79612a0f7deff0c0b0d509802390c8a8b644eb9a0733
+  sha256: be94a9418a51558f320484e764576a62139ec0fef9bfd0a930637ba51ef59dc4
   requires_dist:
   - fastapi>=0.115,<1
   - uvicorn[standard]>=0.30,<1
