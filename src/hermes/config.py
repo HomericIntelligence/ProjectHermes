@@ -124,6 +124,24 @@ class Settings(BaseSettings):
     tls_verify: bool = True
 
     @model_validator(mode="after")
+    def _warn_hmac_disabled_in_production(self) -> "Settings":
+        """Emit a loud WARNING when WEBHOOK_SECRET is unset while bound to all interfaces.
+
+        Production is inferred when ``hermes_host`` is ``0.0.0.0`` (listening on all interfaces).
+        Without a secret, any source can POST to /webhook without authentication.
+        """
+        if not self.webhook_secret and self.hermes_host == "0.0.0.0":
+            _config_logger.warning(
+                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+                "  WEBHOOK_SECRET is NOT SET while HERMES_HOST=0.0.0.0 (PRODUCTION)\n"
+                "  HMAC webhook signature validation is DISABLED — any source can\n"
+                "  POST to /webhook without authentication.  Set WEBHOOK_SECRET to\n"
+                "  a random string of at least 32 characters to enable validation.\n"
+                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+            )
+        return self
+
+    @model_validator(mode="after")
     def _warn_tls_verify_disabled(self) -> "Settings":
         """Emit a loud WARNING when TLS verification is disabled in a production-like environment.
 

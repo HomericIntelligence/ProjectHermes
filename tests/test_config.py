@@ -244,3 +244,52 @@ class TestSubjectsRateLimit:
 
         with pytest.raises(ValidationError):
             Settings()
+
+
+class TestWebhookSecretProductionWarning:
+    """WEBHOOK_SECRET unset + HERMES_HOST=0.0.0.0 must emit a loud warning."""
+
+    def test_no_warning_when_secret_set_and_host_0000(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="a" * 32,
+                hermes_host="0.0.0.0",
+                _env_file=None,
+            )
+        for call in mock_warn.call_args_list:
+            assert "WEBHOOK_SECRET is NOT SET" not in (call.args[0] if call.args else "")
+
+    def test_no_warning_when_secret_empty_and_host_localhost(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="",
+                hermes_host="127.0.0.1",
+                _env_file=None,
+            )
+        for call in mock_warn.call_args_list:
+            assert "WEBHOOK_SECRET is NOT SET" not in (call.args[0] if call.args else "")
+
+    def test_loud_warning_when_secret_empty_and_host_0000(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="",
+                hermes_host="0.0.0.0",
+                _env_file=None,
+            )
+        warning_messages = [call.args[0] for call in mock_warn.call_args_list if call.args]
+        assert any("WEBHOOK_SECRET is NOT SET" in msg for msg in warning_messages)
