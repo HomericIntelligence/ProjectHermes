@@ -15,7 +15,7 @@ bridge in the HomericIntelligence mesh. It covers three audiences:
 |-------------------|------------------------------------|
 | Service name      | `hermes`                           |
 | Default port      | `8080` (env: `HERMES_PORT`)        |
-| Default bind      | `127.0.0.1` (env: `HERMES_HOST`)  |
+| Default bind      | `127.0.0.1` (env: `HERMES_HOST`)   |
 | Production bind   | `0.0.0.0`                          |
 | Docker image      | `hermes` (see `docker-compose.yml`)|
 
@@ -63,11 +63,11 @@ POST {HERMES_PUBLIC_URL}/webhook
 }
 ```
 
-| Field       | Type            | Required | Notes                                               |
-|-------------|-----------------|----------|-----------------------------------------------------|
-| `event`     | string          | yes      | Must be a recognised event type (see below)         |
-| `data`      | object          | yes      | Arbitrary payload; routing fields pulled from here  |
-| `timestamp` | ISO 8601 string | yes      | Must include timezone offset; naive timestamps rejected |
+| Field       | Type            | Required | Notes                                                       |
+|-------------|-----------------|----------|-------------------------------------------------------------|
+| `event`     | string          | yes      | Must be a recognised event type (see below)                 |
+| `data`      | object          | yes      | Arbitrary payload; routing fields pulled from here          |
+| `timestamp` | ISO 8601 string | yes      | Must include timezone offset; naive timestamps rejected     |
 | `signature` | string          | no       | HMAC-SHA256 hex digest; required if `WEBHOOK_SECRET` is set |
 
 ### HMAC Validation
@@ -172,13 +172,13 @@ Every NATS message body is a UTF-8 JSON object:
 }
 ```
 
-| Field            | Type   | Notes                                               |
-|------------------|--------|-----------------------------------------------------|
-| `schema_version` | int    | Current value: `1`. Check before deserializing `data`. |
-| `event`          | string | Original event type string from the webhook         |
-| `data`           | object | Original webhook `data` payload verbatim            |
-| `timestamp`      | string | Timezone-aware ISO 8601                             |
-| `request_id`     | string | HTTP request correlation ID; empty string if absent |
+| Field            | Type   | Notes                                                   |
+|------------------|--------|---------------------------------------------------------|
+| `schema_version` | int    | Current value: `1`. Check before deserializing `data`.  |
+| `event`          | string | Original event type string from the webhook             |
+| `data`           | object | Original webhook `data` payload verbatim                |
+| `timestamp`      | string | Timezone-aware ISO 8601                                 |
+| `request_id`     | string | HTTP request correlation ID; empty string if absent     |
 
 ### Consumer Guidance
 
@@ -192,9 +192,9 @@ Every NATS message body is a UTF-8 JSON object:
 
 Hermes retries transient NATS publish failures with exponential backoff:
 
-| Setting                    | Default | Description                                    |
-|----------------------------|---------|------------------------------------------------|
-| `PUBLISH_RETRIES`          | 3       | Total publish attempts before giving up        |
+| Setting                    | Default | Description                                                     |
+|----------------------------|---------|-----------------------------------------------------------------|
+| `PUBLISH_RETRIES`          | 3       | Total publish attempts before giving up                         |
 | `PUBLISH_RETRY_BASE_DELAY` | 0.1 s   | Base delay; actual = `base × 2^attempt` ± jitter, capped at 2 s |
 
 Retryable errors: `TimeoutError`, `NoRespondersError`, `DrainTimeoutError`,
@@ -207,11 +207,11 @@ and the message is dead-lettered (if `ENABLE_DEAD_LETTER=true`).
 
 These services are verified in `CLAUDE.md` and the repository architecture:
 
-| Service      | Role                  | Subscribes to                          | Notes                                         |
-|--------------|-----------------------|----------------------------------------|-----------------------------------------------|
-| **Argus**    | Observability         | `hi.agents.>`, `hi.tasks.>`            | Monitoring; no action taken                   |
+| Service      | Role                  | Subscribes to                          | Notes                                          |
+|--------------|-----------------------|----------------------------------------|------------------------------------------------|
+| **Argus**    | Observability         | `hi.agents.>`, `hi.tasks.>`            | Monitoring; no action taken                    |
 | **Agamemnon**| Coordination          | External; Hermes calls it via HTTP     | `AGAMEMNON_URL` + `AGAMEMNON_API_KEY` required |
-| **Telemachy**| Workflow engine       | `hi.tasks.>`                           | Drives task workflows from task events        |
+| **Telemachy**| Workflow engine       | `hi.tasks.>`                           | Drives task workflows from task events         |
 
 Unknown event types go to `homeric-deadletter` for inspection and replay.
 
@@ -255,6 +255,7 @@ Rules for AI agents making code changes in this repository:
 4. **Pin dependency versions** in `pixi.toml` using `>=X.Y,<NEXT_MAJOR`. Never use `*`.
 
 5. **Run tests before committing:**
+
    ```bash
    just test          # pytest
    just lint          # ruff check

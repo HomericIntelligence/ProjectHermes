@@ -16,8 +16,8 @@ Each ADR uses the following sections: **Status**, **Date**, **Deciders**, **Cont
 
 ## Index
 
-| # | Title | Status | Date |
-|---|-------|--------|------|
-| [ADR-001](ADR-001-nats-reconnect-strategy.md) | NATS Reconnect Strategy | Accepted | 2024-01-15 |
-| [ADR-002](ADR-002-dead-letter-strategy.md) | Dead-Letter Strategy for Unknown Event Types | Accepted | 2024-01-15 |
-| [ADR-003](ADR-003-schema-version-field.md) | Wire Format Schema Versioning | Accepted | 2024-01-15 |
+| #                                             | Title                                        | Status   | Date       |
+|-----------------------------------------------|----------------------------------------------|----------|------------|
+| [ADR-001](ADR-001-nats-reconnect-strategy.md) | NATS Reconnect Strategy                      | Accepted | 2024-01-15 |
+| [ADR-002](ADR-002-dead-letter-strategy.md)    | Dead-Letter Strategy for Unknown Event Types | Accepted | 2024-01-15 |
+| [ADR-003](ADR-003-schema-version-field.md)    | Wire Format Schema Versioning                | Accepted | 2024-01-15 |
