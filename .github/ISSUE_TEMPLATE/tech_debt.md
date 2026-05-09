@@ -5,9 +5,11 @@ labels: [tech-debt, chore]
 ---
 
 ## Objective
+
 <!-- What needs to be improved and why. -->
 
 ## Context
+
 <!-- File path(s) and line number(s) where the debt lives, if applicable. -->
 
 ## Deliverables
@@ -16,7 +18,9 @@ labels: [tech-debt, chore]
 - [ ] <!-- specific sub-task 2 -->
 
 ## Success Criteria
+
 <!-- How will we know this is resolved? -->
 
 ## Parent Issue
+
 <!-- Link to the Epic tracking issue, e.g. #NNN -->

@@ -47,10 +47,14 @@ def pytest_configure(config: pytest.Config) -> None:
 
 @pytest.fixture(autouse=True)
 def reset_settings() -> Generator[None, None, None]:
-    """Clear the get_settings LRU cache before each test so mutations don't leak."""
+    """Clear the get_settings LRU cache and dependency overrides before/after each test."""
+    from hermes.server import app
+
     get_settings.cache_clear()
+    app.dependency_overrides.clear()
     yield
     get_settings.cache_clear()
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="session")

@@ -27,7 +27,7 @@ def _build_client(
     last_error: str = "",
 ) -> TestClient:
     """Build a TestClient with a mocked Publisher and a known webhook secret."""
-    from hermes.config import get_settings
+    from hermes.config import Settings, get_settings
     from hermes.publisher import Publisher
     from hermes.rate_limit import limiter
     from hermes.server import app
@@ -43,8 +43,9 @@ def _build_client(
 
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
-    # Set a known secret on the live cached Settings instance
-    get_settings().webhook_secret = _TEST_SECRET
+    # Override settings via FastAPI dependency injection
+    test_settings = Settings(webhook_secret=_TEST_SECRET)
+    app.dependency_overrides[get_settings] = lambda: test_settings
     # Reset rate limiter so each test starts with a clean slate
     limiter._storage.reset()  # type: ignore[attr-defined]
     return TestClient(app, raise_server_exceptions=True)
@@ -325,9 +326,9 @@ class TestWebhookEndpoint:
         mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
         app.state.publisher = mock_publisher
 
-        from hermes.config import get_settings
+        from hermes.config import Settings, get_settings
 
-        get_settings().webhook_secret = _TEST_SECRET
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=_TEST_SECRET)
 
         client = TestClient(app, raise_server_exceptions=False)
         payload = {
@@ -1123,7 +1124,7 @@ class TestUnknownEventType:
     """Tests for #125: unknown event types return 422 when dead-lettering is disabled."""
 
     def _build_client_with_unknown_event(self, event: str) -> TestClient:
-        from hermes.config import get_settings
+        from hermes.config import Settings, get_settings
         from hermes.publisher import UnknownEventTypeError, Publisher
         from hermes.rate_limit import limiter
         from hermes.server import app
@@ -1134,10 +1135,7 @@ class TestUnknownEventType:
         mock_publisher.publish = AsyncMock(side_effect=UnknownEventTypeError(event))
 
         app.state.publisher = mock_publisher
-        # Disable HMAC signature validation by clearing the cached Settings secret.
-        # The /webhook handler uses Depends(get_settings), which returns the
-        # lru_cache'd singleton; mutating it here propagates into the request.
-        get_settings().webhook_secret = ""
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret="")
         limiter._storage.reset()  # type: ignore[attr-defined]
         return TestClient(app, raise_server_exceptions=True)
 

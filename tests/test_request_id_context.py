@@ -21,7 +21,7 @@ def _sign(body: bytes) -> str:
 
 
 def _build_client(*, connected: bool = True) -> TestClient:
-    from hermes.config import get_settings
+    from hermes.config import Settings, get_settings
     from hermes.publisher import Publisher
     from hermes.server import app
 
@@ -32,7 +32,7 @@ def _build_client(*, connected: bool = True) -> TestClient:
     mock_publisher.publish = AsyncMock()
 
     app.state.publisher = mock_publisher
-    get_settings().webhook_secret = _TEST_SECRET
+    app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=_TEST_SECRET)
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -105,7 +105,7 @@ class TestRequestIdInLogContext:
         """A 503 from publish timeout should emit a log record with request_id in extra."""
         import asyncio
 
-        from hermes.config import get_settings
+        from hermes.config import Settings, get_settings
         from hermes.publisher import Publisher
         from hermes.server import app
 
@@ -114,7 +114,7 @@ class TestRequestIdInLogContext:
         mock_publisher.active_subjects = []
         mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
         app.state.publisher = mock_publisher
-        get_settings().webhook_secret = _TEST_SECRET
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=_TEST_SECRET)
 
         client = TestClient(app, raise_server_exceptions=False)
         payload = {
@@ -222,7 +222,7 @@ class TestRequestIdInErrorResponses:
         """Publish timeout 503 response body must include request_id."""
         import asyncio
 
-        from hermes.config import get_settings
+        from hermes.config import Settings, get_settings
         from hermes.publisher import Publisher
         from hermes.server import app
 
@@ -231,7 +231,7 @@ class TestRequestIdInErrorResponses:
         mock_publisher.active_subjects = []
         mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
         app.state.publisher = mock_publisher
-        get_settings().webhook_secret = _TEST_SECRET
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=_TEST_SECRET)
 
         client = TestClient(app, raise_server_exceptions=False)
         payload = {
