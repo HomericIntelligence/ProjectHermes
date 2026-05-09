@@ -106,9 +106,15 @@ class TestReconnectLoopRetriesOnLostConnection:
     async def test_reconnect_called_when_nc_is_closed(self) -> None:
         pub = Publisher()
         connect_calls: list[str] = []
+        # Fired as soon as the reconnect loop attempts a second nats.connect call
+        reconnect_attempted: asyncio.Event = asyncio.Event()
 
         async def fake_connect(url: str, **kwargs: object) -> MagicMock:
             connect_calls.append(url)
+            if len(connect_calls) > 1:
+                # This is a reconnect attempt — signal the test and stop the loop
+                reconnect_attempted.set()
+                pub._stop_event.set()
             return _make_mock_nc(closed=False)
 
         with patch("nats.connect", side_effect=fake_connect):
@@ -122,7 +128,8 @@ class TestReconnectLoopRetriesOnLostConnection:
             loop_task = asyncio.ensure_future(
                 pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
             )
-            await asyncio.sleep(0.12)
+            # Block until the reconnect fires (self-terminates) or 5 s safety timeout
+            await asyncio.wait_for(reconnect_attempted.wait(), timeout=5.0)
             pub._stop_event.set()
             await loop_task
 
@@ -131,8 +138,17 @@ class TestReconnectLoopRetriesOnLostConnection:
     @pytest.mark.asyncio
     async def test_reconnect_count_increments_on_success(self) -> None:
         pub = Publisher()
+        call_count = 0
+        # Fired as soon as the reconnect loop successfully reconnects
+        reconnected: asyncio.Event = asyncio.Event()
 
         async def fake_connect(url: str, **kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                # This is a reconnect attempt — signal the test and stop the loop
+                reconnected.set()
+                pub._stop_event.set()
             return _make_mock_nc(closed=False)
 
         with patch("nats.connect", side_effect=fake_connect):
@@ -147,7 +163,8 @@ class TestReconnectLoopRetriesOnLostConnection:
             loop_task = asyncio.ensure_future(
                 pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
             )
-            await asyncio.sleep(0.12)
+            # Block until the reconnect fires (self-terminates) or 5 s safety timeout
+            await asyncio.wait_for(reconnected.wait(), timeout=5.0)
             pub._stop_event.set()
             await loop_task
 
