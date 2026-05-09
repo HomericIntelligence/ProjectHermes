@@ -43,6 +43,12 @@ jobs:
 
           echo "Version check passed: $PYPROJECT_VERSION"
 
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
+
+      - name: Run pre-commit
+        run: pixi run pre-commit run --all-files
+
       - name: Lint
         run: pixi run lint
 
