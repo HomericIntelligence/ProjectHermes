@@ -319,11 +319,11 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: 81b85a1b53265c8ef6d328722a5daa4d4de51f47d1b722b9af51f3b10b462848
+  sha256: 55824391e69dcde80eb04d5be4e6695346671a7d79c18b877e6649358b2364a4
   requires_dist:
   - fastapi>=0.115,<1
   - uvicorn[standard]>=0.30,<1
-  - nats-py>=2.9,<3
+  - nats-py>=2.14.0,<3
   - pydantic>=2.0,<3
   - pydantic-settings>=2.0,<3
   - httpx>=0.27,<1
