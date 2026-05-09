@@ -85,7 +85,7 @@ jobs:
 
       - name: Start NATS with JetStream
         run: |
-          docker run -d --name nats-js -p 4222:4222 -p 8222:8222 nats:alpine -js -m 8222
+          docker run -d --name nats-js -p 4222:4222 -p 8222:8222 nats:2.10@sha256:5498ba57b9471840be3d15b033a4eec554d1c02fa6c2cc0ca2d888637f6c6e2f -js -m 8222
           until curl -sf http://localhost:8222/healthz; do sleep 1; done
 
       - name: Integration tests
