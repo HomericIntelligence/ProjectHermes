@@ -170,4 +170,3 @@ class TestTimeoutValidation:
         monkeypatch.setenv("NATS_PUBLISH_TIMEOUT", "-5")
         with pytest.raises(ValidationError):
             Settings()
-
