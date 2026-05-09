@@ -70,11 +70,11 @@ Once the service is running, a NATS disconnect causes:
 
 ## Alternatives Considered
 
-| Alternative | Reason Rejected |
-|-------------|----------------|
-| `allow_reconnect=True` (library default) | Silent buffering produces false `200 OK` responses and makes health probes unreliable. |
+| Alternative                                            | Reason Rejected                                                                                      |
+|--------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `allow_reconnect=True` (library default)               | Silent buffering produces false `200 OK` responses and makes health probes unreliable.               |
 | `allow_reconnect=True` + in-memory buffer with timeout | Adds complexity; still risks stale delivery; does not eliminate the false-ACK problem for JetStream. |
-| Circuit-breaker middleware | Adds a dependency and operational complexity for a problem that startup retries already solve. |
+| Circuit-breaker middleware                             | Adds a dependency and operational complexity for a problem that startup retries already solve.       |
 
 ---
 

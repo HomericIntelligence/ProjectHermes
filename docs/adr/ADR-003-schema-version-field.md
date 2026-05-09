@@ -33,13 +33,13 @@ schema_version: int = Field(default=1, ge=1, description="Wire format schema ver
 
 **Versioning rules:**
 
-| Change type | Version bump? |
-|-------------|--------------|
+| Change type                  | Version bump?             |
+|------------------------------|---------------------------|
 | New **optional** field added | No — backwards-compatible |
-| Existing field **renamed** | Yes — breaking change |
-| Existing field **removed** | Yes — breaking change |
-| Field **type changed** | Yes — breaking change |
-| New **required** field added | Yes — breaking change |
+| Existing field **renamed**   | Yes — breaking change     |
+| Existing field **removed**   | Yes — breaking change     |
+| Field **type changed**       | Yes — breaking change     |
+| New **required** field added | Yes — breaking change     |
 
 The current version is **1**. All messages carry `"schema_version": 1` until a breaking change
 warrants incrementing to `2`.
@@ -86,12 +86,12 @@ warrants incrementing to `2`.
 
 ## Alternatives Considered
 
-| Alternative | Reason Rejected |
-|-------------|----------------|
-| NATS subject-per-version (e.g., `hi.agents.v2.*`) | Subject proliferation; consumers must subscribe to N subjects; complicates routing logic. |
-| Schema registry (e.g., Confluent Schema Registry) | External infrastructure dependency; significant operational overhead for a lightweight bridge. |
-| Semantic versioning string (e.g., `"1.0.0"`) | Semver comparison logic in every consumer; integer comparison is simpler and sufficient. |
-| No versioning | First breaking change requires coordinated fleet-wide deployment; unacceptable for a distributed system. |
+| Alternative                                       | Reason Rejected                                                                                          |
+|---------------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| NATS subject-per-version (e.g., `hi.agents.v2.*`) | Subject proliferation; consumers must subscribe to N subjects; complicates routing logic.                |
+| Schema registry (e.g., Confluent Schema Registry) | External infrastructure dependency; significant operational overhead for a lightweight bridge.           |
+| Semantic versioning string (e.g., `"1.0.0"`)      | Semver comparison logic in every consumer; integer comparison is simpler and sufficient.                 |
+| No versioning                                     | First breaking change requires coordinated fleet-wide deployment; unacceptable for a distributed system. |
 
 ---
 

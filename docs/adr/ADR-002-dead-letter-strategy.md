@@ -73,12 +73,12 @@ receives `422 Unprocessable Entity`.
 
 ## Alternatives Considered
 
-| Alternative | Reason Rejected |
-|-------------|----------------|
+| Alternative                         | Reason Rejected                                                                                             |
+|-------------------------------------|-------------------------------------------------------------------------------------------------------------|
 | Return `422` for all unknown events | Breaks callers that send forward-compatible events; shifts routing knowledge burden onto upstream services. |
-| Single flat `hi.deadletter` subject | Prevents selective subscription; makes replay and monitoring coarser. |
-| Database-backed dead-letter queue | Adds a stateful dependency; JetStream already provides durable storage. |
-| In-memory only (no JetStream tier) | Events are lost on restart; no replay capability. |
+| Single flat `hi.deadletter` subject | Prevents selective subscription; makes replay and monitoring coarser.                                       |
+| Database-backed dead-letter queue   | Adds a stateful dependency; JetStream already provides durable storage.                                     |
+| In-memory only (no JetStream tier)  | Events are lost on restart; no replay capability.                                                           |
 
 ---
 

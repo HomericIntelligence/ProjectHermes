@@ -198,11 +198,11 @@ gh pr create --title "[Type] Brief description" --body "Closes #<issue-number>"
 
 ### Branching Strategy
 
-| Branch type | Naming convention | Base branch | Notes |
-|-------------|-------------------|-------------|-------|
-| Default | `main` | — | Protected; never push directly |
-| Feature / fix | `<issue>-<slug>` | `main` | e.g. `44-planning-templates` |
-| Release | `release/v<x.y.z>` | `main` | Created from `main` before tagging |
+| Branch type   | Naming convention  | Base branch | Notes                              |
+|---------------|--------------------|-------------|------------------------------------|
+| Default       | `main`             | —           | Protected; never push directly     |
+| Feature / fix | `<issue>-<slug>`   | `main`      | e.g. `44-planning-templates`       |
+| Release       | `release/v<x.y.z>` | `main`      | Created from `main` before tagging |
 
 **Merge strategy:**
 

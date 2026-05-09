@@ -48,8 +48,8 @@ Unknown event types are routed to the `homeric-deadletter` NATS stream for inspe
 Every message published to NATS JetStream includes a `schema_version` integer field (from
 `HermesEventBase` in `src/hermes/models.py`).  The current version is **1**.
 
-| Field            | Type | Current value | Description                              |
-|------------------|------|---------------|------------------------------------------|
+| Field            | Type | Current value | Description                                         |
+|------------------|------|---------------|-----------------------------------------------------|
 | `schema_version` | int  | 1             | Wire format version; increments on breaking changes |
 
 **Consumer guidance:**
@@ -64,25 +64,25 @@ Every message published to NATS JetStream includes a `schema_version` integer fi
 
 ## Configuration
 
-| Variable              | Default                        | Description                                             |
-|-----------------------|--------------------------------|---------------------------------------------------------|
-| NATS_URL              | nats://localhost:4222          | NATS server URL                                         |
-| HERMES_HOST           | 127.0.0.1                     | Host/IP the server binds to                             |
-| HERMES_PORT           | 8080                           | Port Hermes listens on                                  |
-| HERMES_PUBLIC_URL     | `http://localhost:{HERMES_PORT}` | Externally-reachable base URL for the /webhook endpoint |
-| WEBHOOK_SECRET        |                                | HMAC secret for webhook validation (minimum 32 characters) |
-| MAX_PAYLOAD_BYTES     | 1048576                        | Maximum accepted request body size in bytes (1 MB)      |
-| NATS_CONNECT_TIMEOUT  | 5.0                            | NATS connection timeout in seconds                      |
-| NATS_PUBLISH_TIMEOUT  | 5.0                            | NATS publish timeout in seconds                         |
-| NATS_RECONNECT_INTERVAL | 5.0                          | Seconds between external reconnect attempts             |
-| NATS_RECONNECT_HARD_TIMEOUT | 5.0                      | Per-attempt hard timeout for external reconnect (seconds) |
-| AGAMEMNON_URL         |                                | Base URL of the Agamemnon coordination service          |
-| AGAMEMNON_API_KEY     |                                | API key for authenticating with Agamemnon               |
-| AGAMEMNON_TIMEOUT     | 10.0                           | Agamemnon API call timeout in seconds                   |
-| DEAD_LETTER_API_KEY   |                                | API key for GET/DELETE /dead-letters (min 32 chars; auth bypassed when unset) |
-| SHUTDOWN_TIMEOUT      | 10.0                           | Graceful shutdown timeout in seconds                    |
-| WEBHOOK_RATE_LIMIT    | 60/minute                      | Rate limit for POST /webhook endpoint                   |
-| SUBJECTS_RATE_LIMIT   | 60/minute                      | Rate limit for GET /subjects endpoint                   |
+| Variable                    | Default                          | Description                                                                   |
+|-----------------------------|----------------------------------|-------------------------------------------------------------------------------|
+| NATS_URL                    | nats://localhost:4222            | NATS server URL                                                               |
+| HERMES_HOST                 | 127.0.0.1                        | Host/IP the server binds to                                                   |
+| HERMES_PORT                 | 8080                             | Port Hermes listens on                                                        |
+| HERMES_PUBLIC_URL           | `http://localhost:{HERMES_PORT}` | Externally-reachable base URL for the /webhook endpoint                       |
+| WEBHOOK_SECRET              |                                  | HMAC secret for webhook validation (minimum 32 characters)                    |
+| MAX_PAYLOAD_BYTES           | 1048576                          | Maximum accepted request body size in bytes (1 MB)                            |
+| NATS_CONNECT_TIMEOUT        | 5.0                              | NATS connection timeout in seconds                                            |
+| NATS_PUBLISH_TIMEOUT        | 5.0                              | NATS publish timeout in seconds                                               |
+| NATS_RECONNECT_INTERVAL     | 5.0                              | Seconds between external reconnect attempts                                   |
+| NATS_RECONNECT_HARD_TIMEOUT | 5.0                              | Per-attempt hard timeout for external reconnect (seconds)                     |
+| AGAMEMNON_URL               |                                  | Base URL of the Agamemnon coordination service                                |
+| AGAMEMNON_API_KEY           |                                  | API key for authenticating with Agamemnon                                     |
+| AGAMEMNON_TIMEOUT           | 10.0                             | Agamemnon API call timeout in seconds                                         |
+| DEAD_LETTER_API_KEY         |                                  | API key for GET/DELETE /dead-letters (min 32 chars; auth bypassed when unset) |
+| SHUTDOWN_TIMEOUT            | 10.0                             | Graceful shutdown timeout in seconds                                          |
+| WEBHOOK_RATE_LIMIT          | 60/minute                        | Rate limit for POST /webhook endpoint                                         |
+| SUBJECTS_RATE_LIMIT         | 60/minute                        | Rate limit for GET /subjects endpoint                                         |
 
 Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webhook`.
 
