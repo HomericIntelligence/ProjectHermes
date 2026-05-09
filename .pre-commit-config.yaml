@@ -20,3 +20,11 @@ repos:
     rev: v8.24.3
     hooks:
       - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: no-gitleaks-exit-code-0
+        name: Gitleaks must not use --exit-code 0
+        language: pygrep
+        entry: 'gitleaks detect.*--exit-code[= ]0'
+        files: \.github/workflows/.*\.yml$
