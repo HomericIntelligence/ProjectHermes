@@ -138,17 +138,18 @@ class TestReconnectLoopRetriesOnLostConnection:
         with patch("nats.connect", side_effect=fake_connect):
             await pub.connect("nats://localhost:4222")
 
-        initial_count = pub.reconnect_count
+            initial_count = pub.reconnect_count
 
-        # Simulate connection loss
-        pub._nc = _make_mock_nc(closed=True)
+            # Simulate connection loss
+            pub._nc = _make_mock_nc(closed=True)
 
-        loop_task = asyncio.ensure_future(
-            pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
-        )
-        await asyncio.sleep(0.12)
-        pub._stop_event.set()
-        await loop_task
+            pub._stop_event = asyncio.Event()
+            loop_task = asyncio.ensure_future(
+                pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
+            )
+            await asyncio.sleep(0.12)
+            pub._stop_event.set()
+            await loop_task
 
         assert pub.reconnect_count > initial_count
 
@@ -193,16 +194,17 @@ class TestReconnectLoopRetriesOnLostConnection:
         with patch("nats.connect", side_effect=fake_connect):
             await pub.connect("nats://localhost:4222")
 
-        before = NATS_RECONNECTS.labels(result="success")._value.get()
+            before = NATS_RECONNECTS.labels(result="success")._value.get()
 
-        pub._nc = _make_mock_nc(closed=True)
+            pub._nc = _make_mock_nc(closed=True)
 
-        loop_task = asyncio.ensure_future(
-            pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
-        )
-        await asyncio.sleep(0.12)
-        pub._stop_event.set()
-        await loop_task
+            pub._stop_event = asyncio.Event()
+            loop_task = asyncio.ensure_future(
+                pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
+            )
+            await asyncio.sleep(0.12)
+            pub._stop_event.set()
+            await loop_task
 
         after = NATS_RECONNECTS.labels(result="success")._value.get()
         assert after > before
