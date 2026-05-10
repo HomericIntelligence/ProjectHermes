@@ -543,7 +543,7 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: 8a21aed6e76fca26f7c2d24eeae6efb6f6b744dc5954d3261c3fd0a79940b6a6
+  sha256: e590b7e0de4c28d4691fc2687b6c021191aef9f5852284035da5b9b9277aefb2
   requires_dist:
   - fastapi>=0.115,<1
   - uvicorn[standard]>=0.30,<1
@@ -551,7 +551,7 @@ packages:
   - pydantic>=2.0,<3
   - pydantic-settings>=2.0,<3
   - httpx>=0.27,<1
-  - slowapi>=0.1,<1
+  - slowapi>=0.1.9,<1
   - limits>=3.0,<4
   - prometheus-client>=0.25.0,<1
   requires_python: '>=3.10'
