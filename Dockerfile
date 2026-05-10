@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir \
 FROM python:3.12-slim
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /build/deps /usr/local/lib/python3.12/site-packages/
 COPY src/hermes/ ./hermes/
 
@@ -23,4 +25,5 @@ EXPOSE 8085
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${HERMES_PORT:-8085}/ready || exit 1
 
+ENTRYPOINT ["tini", "--"]
 CMD ["python", "-m", "hermes.server"]
