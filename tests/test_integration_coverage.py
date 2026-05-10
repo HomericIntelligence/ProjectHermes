@@ -185,3 +185,42 @@ class TestLoggingConfig:
         parsed = json.loads(out)
         assert "exc_info" in parsed
         assert "ValueError" in parsed["exc_info"]
+
+
+class TestPayloadSizeLimitMiddleware:
+    """Exercise ``hermes.middleware.PayloadSizeLimitMiddleware`` 413 branches.
+
+    These tests build a minimal FastAPI app with a tiny ``max_bytes`` limit
+    so they run without a live NATS server and without sending a full megabyte
+    of data over the wire.
+    """
+
+    def _mini_client(self, max_bytes: int = 10):  # type: ignore[no-untyped-def]
+        """Return a TestClient for a minimal FastAPI app with *max_bytes* limit."""
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from hermes.middleware import PayloadSizeLimitMiddleware
+
+        mini = FastAPI()
+        mini.add_middleware(PayloadSizeLimitMiddleware, max_bytes=max_bytes)
+
+        @mini.post("/")
+        async def _ok() -> dict:  # type: ignore[return]
+            return {"ok": True}
+
+        return TestClient(mini, raise_server_exceptions=False)
+
+    def test_content_length_too_large_returns_413(self) -> None:
+        """An 11-byte body with max_bytes=10 is rejected via the Content-Length header branch."""
+        # httpx/TestClient automatically sets Content-Length from the body, so
+        # the middleware sees Content-Length=11 > max_bytes=10 and returns 413
+        # before even reading the body (middleware.py lines 32-37).
+        client = self._mini_client(max_bytes=10)
+        response = client.post("/", content=b"x" * 11)
+        assert response.status_code == 413
+
+    def test_body_within_limit_passes_through(self) -> None:
+        """A request whose body fits within the limit reaches the route handler (200)."""
+        client = self._mini_client(max_bytes=10)
+        response = client.post("/", content=b"x" * 5)
+        assert response.status_code == 200

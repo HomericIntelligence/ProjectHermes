@@ -17,6 +17,8 @@ from nats.js import JetStreamContext
 
 from hermes.metrics import (
     ACTIVE_SUBJECTS,
+    DEAD_LETTER_QUEUE_ALERTS,
+    DEAD_LETTER_QUEUE_DEPTH,
     DEAD_LETTERS,
     NATS_RECONNECTS,
     PUBLISH_LATENCY,
@@ -59,14 +61,14 @@ class Publisher:
     def __init__(self, enable_dead_letter: bool = True, max_subjects: int | None = None) -> None:
         from hermes.config import get_settings
 
+        s = get_settings()
         self._nc: NATSClient | None = None
         self._js: JetStreamContext | None = None
-        self._max_subjects: int = (
-            max_subjects if max_subjects is not None else get_settings().active_subjects_max
-        )
+        self._max_subjects: int = max_subjects if max_subjects is not None else s.active_subjects_max
         self._active_subjects: OrderedDict[str, None] = OrderedDict()
         self._stream_names: list[str] = []
-        self._dead_letters: deque[dict[str, Any]] = deque(maxlen=1000)
+        self._dead_letters: deque[dict[str, Any]] = deque(maxlen=s.dead_letter_max_size)
+        self._dead_letter_alert_threshold: float = s.dead_letter_alert_threshold
         self._enable_dead_letter = enable_dead_letter
         self._connected: bool = False
         self.reconnect_count: int = 0
@@ -152,20 +154,38 @@ class Publisher:
 
     async def _ensure_streams(self) -> None:
         """Create JetStream streams if they don't exist yet."""
+        from datetime import timedelta
+
         from nats.js.api import StreamConfig
         from nats.js.errors import NotFoundError
 
+        from hermes.config import get_settings
+
         assert self._nc is not None
+        s = get_settings()
         jsm = self._nc.jsm()
-        for name, subjects in (
-            ("homeric-agents", ["hi.agents.>"]),
-            ("homeric-tasks", ["hi.tasks.>"]),
-            ("homeric-deadletter", ["hi.deadletter.>"]),
-        ):
+
+        dead_letter_ttl = (
+            timedelta(seconds=s.dead_letter_ttl_seconds)
+            if s.dead_letter_ttl_seconds > 0
+            else None
+        )
+
+        stream_configs: list[tuple[str, list[str], dict[str, Any]]] = [
+            ("homeric-agents", ["hi.agents.>"], {}),
+            ("homeric-tasks", ["hi.tasks.>"], {}),
+            (
+                "homeric-deadletter",
+                ["hi.deadletter.>"],
+                {"max_age": dead_letter_ttl.total_seconds()} if dead_letter_ttl is not None else {},
+            ),
+        ]
+
+        for name, subjects, extra in stream_configs:
             try:
                 await jsm.stream_info(name)
             except NotFoundError:
-                await jsm.add_stream(StreamConfig(name=name, subjects=subjects))
+                await jsm.add_stream(StreamConfig(name=name, subjects=subjects, **extra))
                 logger.info("Created JetStream stream: %s (%s)", name, subjects)
             if name not in self._stream_names:
                 self._stream_names.append(name)
@@ -215,6 +235,7 @@ class Publisher:
         """Clear the dead-letter queue and return the number of drained items."""
         count = len(self._dead_letters)
         self._dead_letters.clear()
+        DEAD_LETTER_QUEUE_DEPTH.set(0)
         return count
 
     # ------------------------------------------------------------------
@@ -273,6 +294,17 @@ class Publisher:
                 self._dead_letters.append({"event": payload.event, "subject": dead_subject})
                 DEAD_LETTERS.labels(event_type=payload.event).inc()
                 self._track_subject(dead_subject)
+                depth = len(self._dead_letters)
+                DEAD_LETTER_QUEUE_DEPTH.set(depth)
+                capacity = self._dead_letters.maxlen or 0
+                if capacity > 0 and depth >= self._dead_letter_alert_threshold * capacity:
+                    logger.warning(
+                        "Dead-letter queue depth %d/%d exceeds %.0f%% threshold",
+                        depth,
+                        capacity,
+                        self._dead_letter_alert_threshold * 100,
+                    )
+                    DEAD_LETTER_QUEUE_ALERTS.inc()
                 logger.warning(
                     "No subject mapping for event type %r; dead-lettered to %s",
                     payload.event,
