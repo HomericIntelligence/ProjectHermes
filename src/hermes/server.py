@@ -11,6 +11,7 @@ import re
 import signal
 import uuid
 from collections.abc import AsyncGenerator
+import contextlib
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -63,6 +64,19 @@ def _on_shutdown_signal(sig: signal.Signals) -> None:
     """Set the module-level shutdown event when a termination signal arrives."""
     logger.info("Received signal %s; initiating graceful shutdown", sig.name)
     _shutdown_event.set()
+
+
+@contextlib.asynccontextmanager
+async def _inflight_context() -> AsyncGenerator[None, None]:
+    """Increment _inflight on entry and decrement it in finally, even on exception."""
+    global _inflight
+    async with _inflight_lock:
+        _inflight += 1
+    try:
+        yield
+    finally:
+        async with _inflight_lock:
+            _inflight -= 1
 
 
 async def _connect_with_retries(publisher: Publisher, settings: "Settings") -> Exception | None:
@@ -340,73 +354,67 @@ async def ready(response: Response) -> dict[str, object]:
 @limiter.limit(lambda: get_settings().webhook_rate_limit)
 async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcceptedResponse:
     """Receive an external webhook, validate its signature, and publish to NATS."""
-    global _inflight
-    async with _inflight_lock:
-        _inflight += 1
-    try:
-        return await _handle_webhook(request, settings)
-    finally:
-        async with _inflight_lock:
-            _inflight -= 1
+    return await _handle_webhook(request, settings)
 
 
 async def _handle_webhook(request: Request, settings: Settings) -> WebhookAcceptedResponse:
     raw_body = await request.body()
     request_id: str = request.state.request_id
 
-    # HMAC validation (skipped when no secret is configured)
-    if settings.webhook_secret:
-        _verify_signature(raw_body, request.headers.get("X-Webhook-Signature", ""), settings)
+    async with _inflight_context():
+        # HMAC validation (skipped when no secret is configured)
+        if settings.webhook_secret:
+            _verify_signature(raw_body, request.headers.get("X-Webhook-Signature", ""), settings)
 
-    try:
-        payload = WebhookPayload.model_validate_json(raw_body)
-    except Exception as exc:
-        logger.warning("Invalid webhook payload: %s", exc, extra={"request_id": request_id})
-        WEBHOOKS_FAILED.labels(reason="invalid_payload").inc()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Invalid payload format",
-        ) from exc
+        try:
+            payload = WebhookPayload.model_validate_json(raw_body)
+        except Exception as exc:
+            logger.warning("Invalid webhook payload: %s", exc, extra={"request_id": request_id})
+            WEBHOOKS_FAILED.labels(reason="invalid_payload").inc()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Invalid payload format",
+            ) from exc
 
-    WEBHOOKS_RECEIVED.labels(event_type=payload.event).inc()
+        WEBHOOKS_RECEIVED.labels(event_type=payload.event).inc()
 
-    publisher: Publisher = app.state.publisher
-    if not publisher.is_connected:
-        logger.error(
-            "NATS not connected; cannot publish event %r",
-            payload.event,
-            extra={"request_id": request_id},
-        )
-        WEBHOOKS_FAILED.labels(reason="nats_not_connected").inc()
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="NATS publisher not connected",
-        )
+        publisher: Publisher = app.state.publisher
+        if not publisher.is_connected:
+            logger.error(
+                "NATS not connected; cannot publish event %r",
+                payload.event,
+                extra={"request_id": request_id},
+            )
+            WEBHOOKS_FAILED.labels(reason="nats_not_connected").inc()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="NATS publisher not connected",
+            )
 
-    try:
-        await publisher.publish(
-            payload,
-            publish_timeout=settings.nats_publish_timeout,
-            request_id=request_id,
-        )
-    except asyncio.TimeoutError:
-        logger.error(
-            "NATS publish timed out for event %r",
-            payload.event,
-            extra={"request_id": request_id},
-        )
-        WEBHOOKS_FAILED.labels(reason="publish_timeout").inc()
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="NATS publish timed out",
-        )
-    except UnknownEventTypeError as exc:
-        WEBHOOKS_FAILED.labels(reason="unknown_event_type").inc()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Unknown event type: {exc}",
-        ) from exc
-    return WebhookAcceptedResponse(status="accepted", event=payload.event, request_id=request_id)
+        try:
+            await publisher.publish(
+                payload,
+                publish_timeout=settings.nats_publish_timeout,
+                request_id=request_id,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "NATS publish timed out for event %r",
+                payload.event,
+                extra={"request_id": request_id},
+            )
+            WEBHOOKS_FAILED.labels(reason="publish_timeout").inc()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="NATS publish timed out",
+            )
+        except UnknownEventTypeError as exc:
+            WEBHOOKS_FAILED.labels(reason="unknown_event_type").inc()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Unknown event type: {exc}",
+            ) from exc
+        return WebhookAcceptedResponse(status="accepted", event=payload.event, request_id=request_id)
 
 
 @app.get(

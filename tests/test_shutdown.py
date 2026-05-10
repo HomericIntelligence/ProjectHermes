@@ -306,3 +306,96 @@ class TestLifespanShutdown:
 
         # Reset inflight for subsequent tests
         srv._inflight = 0
+
+
+# ---------------------------------------------------------------------------
+# _inflight counter correctness (issue #345)
+# ---------------------------------------------------------------------------
+
+
+class TestInflightCounter:
+    @pytest.mark.asyncio
+    async def test_context_manager_increments_and_decrements(self) -> None:
+        """_inflight_context increments on entry and decrements on exit."""
+        import hermes.server as srv
+
+        assert srv._inflight == 0
+        async with srv._inflight_context():
+            async with srv._inflight_lock:
+                assert srv._inflight == 1
+        async with srv._inflight_lock:
+            assert srv._inflight == 0
+
+    @pytest.mark.asyncio
+    async def test_context_manager_decrements_on_exception(self) -> None:
+        """_inflight_context decrements even when an exception is raised inside it."""
+        import hermes.server as srv
+
+        assert srv._inflight == 0
+        with pytest.raises(RuntimeError):
+            async with srv._inflight_context():
+                raise RuntimeError("boom")
+        async with srv._inflight_lock:
+            assert srv._inflight == 0
+
+    @pytest.mark.asyncio
+    async def test_context_manager_decrements_on_http_exception(self) -> None:
+        """_inflight_context decrements when an HTTPException is raised inside it."""
+        import hermes.server as srv
+        from fastapi import HTTPException
+
+        assert srv._inflight == 0
+        with pytest.raises(HTTPException):
+            async with srv._inflight_context():
+                raise HTTPException(status_code=503, detail="test")
+        async with srv._inflight_lock:
+            assert srv._inflight == 0
+
+    def test_webhook_post_resets_inflight_to_zero_after_success(self) -> None:
+        """After a successful webhook POST, _inflight returns to 0."""
+        import hermes.server as srv
+        from hermes.config import get_settings
+
+        get_settings().webhook_secret = ""
+        client = _build_client()
+        assert srv._inflight == 0
+        response = client.post(
+            "/webhook",
+            json={
+                "event": "agent.created",
+                "data": {"host": "h", "name": "n"},
+                "timestamp": "2026-04-22T00:00:00Z",
+            },
+        )
+        assert response.status_code == 202
+        assert srv._inflight == 0
+
+    def test_webhook_post_resets_inflight_to_zero_on_publish_failure(self) -> None:
+        """After a failed publish, _inflight returns to 0."""
+        import hermes.server as srv
+        from hermes.config import get_settings
+
+        get_settings().webhook_secret = ""
+        mock_pub = _make_mock_publisher()
+        mock_pub.publish = AsyncMock(side_effect=asyncio.TimeoutError())
+        client = _build_client(mock_pub)
+        assert srv._inflight == 0
+        response = client.post(
+            "/webhook",
+            json={
+                "event": "agent.created",
+                "data": {"host": "h", "name": "n"},
+                "timestamp": "2026-04-22T00:00:00Z",
+            },
+        )
+        assert response.status_code == 503
+        assert srv._inflight == 0
+
+    def test_health_inflight_requests_reflects_module_counter(self) -> None:
+        """The /health endpoint reports whatever _inflight is set to."""
+        import hermes.server as srv
+
+        srv._inflight = 3
+        client = _build_client()
+        body = client.get("/health").json()
+        assert body["inflight_requests"] == 3
