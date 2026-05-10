@@ -226,7 +226,7 @@ class TestEnsureStreamsDeadLetterTTL:
             c for c in calls if c.args[0].name == "homeric-deadletter"
         )
         cfg = dead_letter_call.args[0]
-        assert cfg.max_age == timedelta(seconds=3600)
+        assert cfg.max_age == timedelta(seconds=3600).total_seconds()
 
     @pytest.mark.asyncio
     async def test_no_max_age_when_ttl_is_zero(self) -> None:
