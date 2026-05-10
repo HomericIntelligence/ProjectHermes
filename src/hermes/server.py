@@ -354,14 +354,7 @@ async def ready(response: Response) -> dict[str, object]:
 @limiter.limit(lambda: get_settings().webhook_rate_limit)
 async def receive_webhook(request: Request, settings: SettingsDep) -> WebhookAcceptedResponse:
     """Receive an external webhook, validate its signature, and publish to NATS."""
-    global _inflight
-    async with _inflight_lock:
-        _inflight += 1
-    try:
-        return await _handle_webhook(request, settings)
-    finally:
-        async with _inflight_lock:
-            _inflight -= 1
+    return await _handle_webhook(request, settings)
 
 
 async def _handle_webhook(request: Request, settings: Settings) -> WebhookAcceptedResponse:
