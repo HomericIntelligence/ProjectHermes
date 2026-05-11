@@ -26,7 +26,7 @@ health:
 
 # One-command developer setup: copy .env, install deps, regenerate lock file
 bootstrap:
-    cp -n .env.example .env || true
+    if [ ! -f .env ]; then cp .env.example .env; fi
     pixi install --frozen || pixi update
     @echo "Ready! Run 'just dev' to start."
 
