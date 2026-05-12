@@ -292,6 +292,10 @@ jobs:
               --report-format sarif --report-path gitleaks.sarif --exit-code 1
           fi
 
+      # `if: always()` is intentional: even when "Run Gitleaks" exits non-zero (secret found),
+      # we still want the SARIF report uploaded so reviewers can investigate the finding. Do NOT
+      # add `continue-on-error: true` to the Run Gitleaks step — that would let leaked secrets
+      # silently merge to main. The forbid-suppressions guard would also reject it.
       - name: Upload Gitleaks SARIF
         if: always() && hashFiles('gitleaks.sarif') != ''
         uses: actions/upload-artifact@v7
