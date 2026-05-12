@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     log_json: bool = False
     active_subjects_max: int = 1000
     webhook_rate_limit: str = "60/minute"
+    # ``webhook_rate_limit_key`` selects the slowapi key strategy for /webhook.
+    # Currently only "ip" (== ``slowapi.util.get_remote_address``) is wired up in
+    # ``hermes.rate_limit``; "endpoint" is reserved for a future per-route key strategy. The
+    # validator below rejects unknown values at startup so misconfiguration fails loud.
     webhook_rate_limit_key: str = "ip"
     subjects_rate_limit: str = "60/minute"
     publish_retries: int = Field(default=3, ge=1)
@@ -93,6 +97,16 @@ class Settings(BaseSettings):
     def _validate_rate_limit(cls, v: str) -> str:
         if not re.match(r"^\d+\s*/\s*(second|minute|hour|day)$", v):
             raise ValueError(f"Rate limit must be like '100/minute', got: {v!r}")
+        return v
+
+    @field_validator("webhook_rate_limit_key")
+    @classmethod
+    def _validate_rate_limit_key(cls, v: str) -> str:
+        allowed = {"ip", "endpoint"}
+        if v not in allowed:
+            raise ValueError(
+                f"WEBHOOK_RATE_LIMIT_KEY must be one of {sorted(allowed)}, got: {v!r}"
+            )
         return v
 
     @field_validator("webhook_secret")

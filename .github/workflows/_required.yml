@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# Single source of truth — bump together with GITLEAKS_VERSION in
+# .github/workflows/security.yml so PR scans and required CI agree.
+env:
+  GITLEAKS_VERSION: "8.30.1"
+
 concurrency:
   group: required-${{ github.head_ref || github.sha }}
   cancel-in-progress: true
@@ -274,7 +279,7 @@ jobs:
 
       - name: Install Gitleaks
         run: |
-          GITLEAKS_VERSION=8.30.1
+          # GITLEAKS_VERSION comes from the workflow-level env (single source of truth).
           OS=$(uname -s | tr '[:upper:]' '[:lower:]')
           ARCH=$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')
           curl -sSfL \
@@ -293,6 +298,10 @@ jobs:
           fi
 
       - name: Upload Gitleaks SARIF
+        # `if: always()` is intentional: even when "Run Gitleaks" exits non-zero (secret found),
+        # we still want the SARIF report uploaded so reviewers can investigate the finding.
+        # Do NOT make the Run Gitleaks step itself non-fatal — that would let leaked secrets
+        # silently merge to main. The forbid-suppressions guard would also reject any such opt-out.
         if: always() && hashFiles('gitleaks.sarif') != ''
         uses: actions/upload-artifact@v7
         with:

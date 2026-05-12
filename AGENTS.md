@@ -35,9 +35,12 @@ Hermes (FastAPI — this service)
     ▼
 NATS JetStream
     │
-    ├──► hi.agents.>     → Argus (observability), Agamemnon (coordination)
+    ├──► hi.agents.>     → Argus (observability)
     ├──► hi.tasks.>      → Telemachy (workflow engine)
     └──► hi.deadletter.> → unknown / unroutable events
+
+Hermes also issues a synchronous HTTP call to Agamemnon (out-of-band from NATS)
+on webhook receipt — see §3 below.
 ```
 
 ---
@@ -87,6 +90,11 @@ Unauthorized`.
 | `task.updated`  | `homeric-tasks`   | `hi.tasks.{team_id}.{task_id}.updated`     |
 | `task.completed`| `homeric-tasks`   | `hi.tasks.{team_id}.{task_id}.completed`   |
 | `task.failed`   | `homeric-tasks`   | `hi.tasks.{team_id}.{task_id}.failed`      |
+
+> **Forward-compatible only:** `task.updated`, `task.completed`, and `task.failed` are accepted by
+> Hermes for forward-compatibility, but the upstream service does **not yet emit them**. Consumers
+> should not rely on receiving these events today. See [§3 — Not Yet Integrated](#not-yet-integrated)
+> and [Odysseus#33](https://github.com/HomericIntelligence/Odysseus/issues/33).
 
 Unknown event types are routed to `hi.deadletter.{sanitized-event}` when
 `ENABLE_DEAD_LETTER=true` (the default).
@@ -196,6 +204,8 @@ Hermes retries transient NATS publish failures with exponential backoff:
 |----------------------------|---------|-----------------------------------------------------------------|
 | `PUBLISH_RETRIES`          | 3       | Total publish attempts before giving up                         |
 | `PUBLISH_RETRY_BASE_DELAY` | 0.1 s   | Base delay; actual = `base × 2^attempt` ± jitter, capped at 2 s |
+| `NATS_RETRY_ATTEMPTS`      | 3       | Initial-connect retries at startup before failing the boot      |
+| `NATS_RETRY_INTERVAL`      | 5.0 s   | Delay between initial-connect retries at startup (not used by the per-publish retry path; surfaced on `/health`) |
 
 Retryable errors: `TimeoutError`, `NoRespondersError`, `DrainTimeoutError`,
 `ConnectionReconnectingError`, `StaleConnectionError`. Non-retryable errors propagate immediately

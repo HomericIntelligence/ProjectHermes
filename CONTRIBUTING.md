@@ -165,6 +165,78 @@ just health
 
 ```
 
+### Releasing a New Version
+
+Hermes publishes Docker images to GHCR (`ghcr.io/homericintelligence/projecthermes`) **only** on
+SemVer tags matching `v*.*.*`. Merges to `main` do not trigger a publish. To cut a release:
+
+```bash
+# 1. From a clean main, bump the version in BOTH pyproject.toml and pixi.toml
+#    (the deps/version-sync CI job rejects a mismatch).
+git checkout main && git pull
+$EDITOR pyproject.toml pixi.toml   # update [project].version / [project].version
+
+# 2. Commit and merge a release-prep PR
+git checkout -b release/v0.X.Y
+git commit -am "chore(release): v0.X.Y"
+gh pr create --title "chore(release): v0.X.Y" --body "Release prep"
+
+# 3. After the PR merges, tag the resulting commit on main and push the tag
+git checkout main && git pull
+git tag v0.X.Y
+git push origin v0.X.Y
+
+# 4. Watch the Publish workflow run; verify the image lands on GHCR
+gh run watch --exit-status
+gh api /orgs/HomericIntelligence/packages/container/projecthermes/versions \
+  --jq '.[0:3] | .[] | {name, created_at, metadata: .metadata.container.tags}'
+```
+
+Always tag on `main` after the version bump merges — never tag a feature branch.
+
+### Installing with pip (alternative to pixi)
+
+Pixi is the **authoritative** development environment. `pip install .` is supported for runtime
+consumers who prefer pip:
+
+```bash
+# Runtime install only (resolves bounded ranges from pyproject.toml)
+pip install .
+
+# Editable install (no dev tools — pixi remains the only path to ruff/pytest/mypy)
+pip install -e .
+```
+
+Notes:
+
+- Dev tools (`ruff`, `pytest`, `mypy`, `pre-commit`) are **not** installed by `pip install .` —
+  they live in the `pixi.toml` `feature` blocks. There is no `[project.optional-dependencies]`
+  table, so `pip install '.[dev]'` does nothing useful today.
+- The bounded version ranges in `pyproject.toml` (`>=X,<NEXT_MAJOR`) are honoured by both pip and
+  pixi; reproducible CI uses `pixi install --locked` against `pixi.lock`.
+
+### Bumping the NATS Image Digest
+
+`docker-compose.yml` and the `integration-tests` job in `.github/workflows/_required.yml` both
+pin the NATS image to an immutable `@sha256:<digest>`. Bump the digest monthly (or sooner when a
+CVE scan flags the running image):
+
+```bash
+# 1. Pull the desired tag
+docker pull nats:2.14
+
+# 2. Read the new digest
+docker inspect --format '{{index .RepoDigests 0}}' nats:2.14
+
+# 3. Update BOTH files atomically in the same PR:
+#    - docker-compose.yml  (services.nats.image)
+#    - .github/workflows/_required.yml  (integration-tests "Start NATS with JetStream")
+# Then commit and open a PR titled "chore(deps): bump nats image digest".
+```
+
+If you bump only one file, `just docker-up` and the integration-tests CI job will end up running
+different NATS versions. The `forbid-suppressions` lint guard does not catch this — verify by hand.
+
 ### Python Conventions
 
 - **Python version**: 3.10+ (managed by pixi)

@@ -14,6 +14,22 @@ Each ADR uses the following sections: **Status**, **Date**, **Deciders**, **Cont
 
 `Proposed` → `Accepted` → `Deprecated` / `Superseded by ADR-NNN`
 
+## Updating an ADR Status
+
+ADRs are append-mostly: once Accepted, the body is **not** rewritten. To change a status:
+
+1. Edit two places in the ADR file: the **header** (`**Status:** ...` near the top) and the
+   **Document Metadata** footer (`**Status:** ...` at the bottom). They must match — drift
+   between header and footer is a review red flag.
+2. If superseding, also fill in `**Superseded by:** ADR-NNN` in the footer of the old ADR and add
+   `**Supersedes:** ADR-MMM` in the footer of the new one.
+3. Update the **Status** column of the index table below so the index never drifts from the file
+   body.
+4. Open a PR titled `docs(adr): mark ADR-NNN as <new-status>` with the rationale in the body.
+   Approval requires at least one Hermes maintainer; the PR must not touch the ADR's Context,
+   Decision, Rationale, Consequences, or Alternatives Considered sections — those remain
+   historical record.
+
 ## Index
 
 | #                                             | Title                                        | Status   | Date       |

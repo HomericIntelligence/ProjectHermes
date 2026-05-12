@@ -228,6 +228,13 @@ async def _require_dead_letter_key(
 
     When ``dead_letter_api_key`` is unset the check is bypassed (opt-in).
     A timing-safe comparison prevents key enumeration via response timing.
+
+    .. note::
+       Use ``str = Header(default="")`` rather than ``Annotated[str, Header()]`` here. With
+       ``from __future__ import annotations`` (active in this module), ``Annotated`` parameters
+       are evaluated as forward references inside FastAPI's ``Depends()`` machinery and raise
+       ``PydanticUserError`` at app startup on Python 3.14+. The plain default-arg form sidesteps
+       the forward-reference resolution entirely. See issue #518.
     """
     if not settings.dead_letter_api_key:
         return
@@ -281,6 +288,11 @@ class ShutdownMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
 
 app.add_middleware(ShutdownMiddleware)
 app.add_middleware(RequestIDMiddleware)
+# NOTE: ``max_bytes`` is captured from ``get_settings()`` at module-load time, *outside* any
+# FastAPI ``Depends`` context. As a consequence, ``app.dependency_overrides[get_settings]`` does
+# **not** affect this middleware during tests — tests that need a non-default
+# ``max_payload_bytes`` must set the env var (or monkey-patch ``get_settings``) *before* importing
+# ``hermes.server``. See issue #455 for the discussion and rationale.
 app.add_middleware(PayloadSizeLimitMiddleware, max_bytes=get_settings().max_payload_bytes)
 app.add_middleware(SlowAPIMiddleware)
 

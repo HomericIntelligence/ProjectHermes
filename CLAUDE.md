@@ -25,11 +25,13 @@ NATS JetStream (via ProjectKeystone)
     │  hi.agents.{host}.{name}.{event}
     │  hi.tasks.{team_id}.{task_id}.{event}
     │
-    ├──► Argus      (observability)
-    ├──► Agamemnon  (coordination)
-    ├──► Telemachy  (workflow engine)
+    ├──► Argus      (observability — NATS subscriber)
+    ├──► Telemachy  (workflow engine — NATS subscriber)
     │
     └──► homeric-deadletter (unknown event types)
+
+(Agamemnon is **not** a NATS subscriber — Hermes calls it directly via HTTP on
+webhook receipt; see AGENTS.md §3.)
 ```
 
 **Subject schema:**
@@ -74,12 +76,21 @@ Every message published to NATS JetStream includes a `schema_version` integer fi
 | MAX_PAYLOAD_BYTES     | 1048576                        | Maximum accepted request body size in bytes (1 MB)      |
 | NATS_CONNECT_TIMEOUT  | 5.0                            | NATS connection timeout in seconds                      |
 | NATS_PUBLISH_TIMEOUT  | 5.0                            | NATS publish timeout in seconds                         |
+| NATS_RETRY_ATTEMPTS   | 3                              | Initial-connect retry attempts before giving up at startup |
+| NATS_RETRY_INTERVAL   | 5.0                            | Seconds between initial-connect retries at startup (also surfaced via /health) |
 | NATS_RECONNECT_INTERVAL | 5.0                          | Seconds between external reconnect attempts             |
 | NATS_RECONNECT_HARD_TIMEOUT | 5.0                      | Per-attempt hard timeout for external reconnect (seconds) |
 | DEAD_LETTER_API_KEY   |                                | API key for GET/DELETE /dead-letters (min 32 chars; auth bypassed when unset) |
 | SHUTDOWN_TIMEOUT      | 10.0                           | Graceful shutdown timeout in seconds                    |
 | WEBHOOK_RATE_LIMIT    | 60/minute                      | Rate limit for POST /webhook endpoint                   |
+| WEBHOOK_RATE_LIMIT_KEY | ip                            | Rate-limit key strategy: `ip` (only currently wired) or `endpoint` (reserved) |
 | SUBJECTS_RATE_LIMIT   | 60/minute                      | Rate limit for GET /subjects endpoint                   |
+| ENABLE_DEAD_LETTER    | true                           | Route unparseable / unknown events to `hi.deadletter.>` |
+| DEAD_LETTER_MAX_SIZE  | 1000                           | Maximum entries kept in the in-memory dead-letter queue |
+| DEAD_LETTER_TTL_SECONDS | 86400                        | TTL applied to the JetStream `homeric-deadletter` stream (0 = no expiry) |
+| DEAD_LETTER_ALERT_THRESHOLD | 0.8                      | Fraction of `DEAD_LETTER_MAX_SIZE` at which a queue-pressure alert is logged |
+| DEAD_LETTER_PAGE_SIZE_DEFAULT | 100                    | Default page size for `GET /dead-letters`               |
+| DEAD_LETTER_PAGE_SIZE_MAX | 500                        | Maximum allowed page size for `GET /dead-letters`       |
 
 Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webhook`.
 
@@ -101,6 +112,48 @@ Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webho
 7. **Subject sanitization** — NATS subject tokens are sanitized via `_slug()`: spaces become
    hyphens, dots become hyphens, and wildcards (`*` and `>`) are stripped entirely. Tokens are
    lowercased and subject strings are typically capped at 64 characters.
+
+## Future Integrations
+
+### Agamemnon (deferred — fields removed per #324)
+
+`agamemnon_url` / `agamemnon_api_key` were intentionally removed as dead config (YAGNI). When
+Agamemnon integration is implemented, follow this pattern so it matches existing patterns in the
+codebase:
+
+- Add fields to `Settings` in `hermes/config.py`: `agamemnon_url: str | None = None`,
+  `agamemnon_api_key: SecretStr | None = None`, plus a `agamemnon_timeout: float = 5.0`
+  (validate `> 0`). Leaving the URL unset must keep Agamemnon dispatch fully disabled.
+- Hold a single `httpx.AsyncClient` for the lifetime of the app (constructed in `lifespan`,
+  closed in shutdown) — never construct per-request. Pass the connection-holding client through
+  `app.state` or a DI provider.
+- Plumb `agamemnon_timeout` into the client (`httpx.AsyncClient(timeout=...)`) rather than
+  hard-coding a value at the call site.
+- Surface health on `/health` (e.g. `agamemnon_reachable: bool`) only when `agamemnon_url` is
+  configured — do not regress the no-Agamemnon happy path.
+- Authenticate via `Authorization: Bearer ${AGAMEMNON_API_KEY}`. Never log the key.
+
+If the design evolves significantly, capture the decision in a new ADR rather than changing this
+note.
+
+## Container Runtime Requirements
+
+The Hermes container is configured `read_only: true` (see `docker-compose.yml`). Operators using
+plain `docker run` instead of compose **must** supply the same hardening flags or the container
+will fail to start when it tries to write logs/temp files:
+
+```bash
+docker run --rm \
+  --read-only \
+  --tmpfs /tmp \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  -p 8085:8085 \
+  -e NATS_URL=nats://host:4222 \
+  ghcr.io/homericintelligence/projecthermes:<tag>
+```
+
+The `--tmpfs /tmp` mount is required by the Python interpreter and Uvicorn for ephemeral state.
 
 ## CI/CD
 

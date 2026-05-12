@@ -106,7 +106,8 @@ Hermes exposes several endpoints for webhooks, health checks, and observability:
 | `/metrics`       | GET    | Prometheus metrics (counter, gauge, histogram)                                      | 200             |
 | `/subjects`      | GET    | List all NATS subjects published to in this session                                 | 200             |
 | `/events`        | GET    | Canonical list of supported webhook event types (agent_events, task_events)         | 200             |
-| `/dead-letters`  | GET    | View in-memory dead-letter queue of unroutable events                               | 200             |
+| `/dead-letters`  | GET    | View in-memory dead-letter queue of unroutable events                               | 200 / 401       |
+| `/dead-letters`  | DELETE | Drain (clear) the in-memory dead-letter queue                                       | 200 / 401       |
 
 ### Health Checks
 
@@ -181,12 +182,18 @@ cp .env.example .env
 
 ### NATS Reconnection
 
-Hermes connects to NATS with the following behavior:
+Hermes connects to NATS with the following behavior (see
+[ADR-001](docs/adr/ADR-001-nats-reconnect-strategy.md) for the rationale):
 
 - **Initial connection:** Uses `NATS_CONNECT_TIMEOUT` to establish the first connection to the
   NATS server.
-- **Automatic reconnection:** When an established connection drops, nats-py automatically attempts
-  to reconnect according to its internal backoff strategy.
+- **Fail-fast on disconnect:** Hermes calls `nats.connect(allow_reconnect=False)` so the nats-py
+  client never silently buffers messages while disconnected. A dropped connection is reflected
+  immediately on `/health` and `/ready` (both return `503`) and `POST /webhook` returns `503`
+  rather than acknowledging events that were never durably published.
+- **External reconnect loop:** A background task retries the connection every
+  `NATS_RECONNECT_INTERVAL` seconds with a `NATS_RECONNECT_HARD_TIMEOUT` per attempt; until a
+  reconnect succeeds the service stays unhealthy.
 - **Publish timeout:** Messages published to JetStream have a per-operation timeout of
   `NATS_PUBLISH_TIMEOUT`, ensuring pub/sub calls don't hang indefinitely.
 - **Connection lifecycle:** Use `SHUTDOWN_TIMEOUT` to allow graceful in-flight request completion
@@ -220,6 +227,13 @@ export TLS_KEY_FILE=/etc/hermes/certs/client-key.pem
 export TLS_CA_BUNDLE=/etc/hermes/certs/ca-bundle.crt
 just start
 ```
+
+## Installation
+
+Pixi is the recommended install path because it manages a reproducible Python toolchain.
+`pip install .` is also supported for runtime consumers — see
+[CONTRIBUTING.md → Installing with pip](CONTRIBUTING.md#installing-with-pip-alternative-to-pixi)
+for the caveats (dev tooling lives in `pixi.toml`, not in a pip extras group).
 
 ## Development
 

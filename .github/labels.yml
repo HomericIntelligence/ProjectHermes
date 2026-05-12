@@ -10,3 +10,6 @@
 - name: cleanup
   color: "c5def5"
   description: "Code or config cleanup"
+- name: epic
+  color: "7057ff"
+  description: "Large multi-issue effort tracked as an umbrella"
