@@ -106,7 +106,8 @@ Hermes exposes several endpoints for webhooks, health checks, and observability:
 | `/metrics`       | GET    | Prometheus metrics (counter, gauge, histogram)                                      | 200             |
 | `/subjects`      | GET    | List all NATS subjects published to in this session                                 | 200             |
 | `/events`        | GET    | Canonical list of supported webhook event types (agent_events, task_events)         | 200             |
-| `/dead-letters`  | GET    | View in-memory dead-letter queue of unroutable events                               | 200             |
+| `/dead-letters`  | GET    | View in-memory dead-letter queue of unroutable events                               | 200 / 401       |
+| `/dead-letters`  | DELETE | Drain (clear) the in-memory dead-letter queue                                       | 200 / 401       |
 
 ### Health Checks
 
