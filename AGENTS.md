@@ -196,6 +196,8 @@ Hermes retries transient NATS publish failures with exponential backoff:
 |----------------------------|---------|-----------------------------------------------------------------|
 | `PUBLISH_RETRIES`          | 3       | Total publish attempts before giving up                         |
 | `PUBLISH_RETRY_BASE_DELAY` | 0.1 s   | Base delay; actual = `base × 2^attempt` ± jitter, capped at 2 s |
+| `NATS_RETRY_ATTEMPTS`      | 3       | Initial-connect retries at startup before failing the boot      |
+| `NATS_RETRY_INTERVAL`      | 5.0 s   | Delay between initial-connect retries at startup (not used by the per-publish retry path; surfaced on `/health`) |
 
 Retryable errors: `TimeoutError`, `NoRespondersError`, `DrainTimeoutError`,
 `ConnectionReconnectingError`, `StaleConnectionError`. Non-retryable errors propagate immediately
