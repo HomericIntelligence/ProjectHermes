@@ -165,6 +165,27 @@ just health
 
 ```
 
+### Installing with pip (alternative to pixi)
+
+Pixi is the **authoritative** development environment. `pip install .` is supported for runtime
+consumers who prefer pip:
+
+```bash
+# Runtime install only (resolves bounded ranges from pyproject.toml)
+pip install .
+
+# Editable install (no dev tools — pixi remains the only path to ruff/pytest/mypy)
+pip install -e .
+```
+
+Notes:
+
+- Dev tools (`ruff`, `pytest`, `mypy`, `pre-commit`) are **not** installed by `pip install .` —
+  they live in the `pixi.toml` `feature` blocks. There is no `[project.optional-dependencies]`
+  table, so `pip install '.[dev]'` does nothing useful today.
+- The bounded version ranges in `pyproject.toml` (`>=X,<NEXT_MAJOR`) are honoured by both pip and
+  pixi; reproducible CI uses `pixi install --locked` against `pixi.lock`.
+
 ### Bumping the NATS Image Digest
 
 `docker-compose.yml` and the `integration-tests` job in `.github/workflows/_required.yml` both

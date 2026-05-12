@@ -228,6 +228,13 @@ export TLS_CA_BUNDLE=/etc/hermes/certs/ca-bundle.crt
 just start
 ```
 
+## Installation
+
+Pixi is the recommended install path because it manages a reproducible Python toolchain.
+`pip install .` is also supported for runtime consumers — see
+[CONTRIBUTING.md → Installing with pip](CONTRIBUTING.md#installing-with-pip-alternative-to-pixi)
+for the caveats (dev tooling lives in `pixi.toml`, not in a pip extras group).
+
 ## Development
 
 ```bash
