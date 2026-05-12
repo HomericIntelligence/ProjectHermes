@@ -281,6 +281,11 @@ class ShutdownMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
 
 app.add_middleware(ShutdownMiddleware)
 app.add_middleware(RequestIDMiddleware)
+# NOTE: ``max_bytes`` is captured from ``get_settings()`` at module-load time, *outside* any
+# FastAPI ``Depends`` context. As a consequence, ``app.dependency_overrides[get_settings]`` does
+# **not** affect this middleware during tests — tests that need a non-default
+# ``max_payload_bytes`` must set the env var (or monkey-patch ``get_settings``) *before* importing
+# ``hermes.server``. See issue #455 for the discussion and rationale.
 app.add_middleware(PayloadSizeLimitMiddleware, max_bytes=get_settings().max_payload_bytes)
 app.add_middleware(SlowAPIMiddleware)
 
