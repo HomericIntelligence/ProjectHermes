@@ -112,6 +112,25 @@ Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webho
    hyphens, dots become hyphens, and wildcards (`*` and `>`) are stripped entirely. Tokens are
    lowercased and subject strings are typically capped at 64 characters.
 
+## Container Runtime Requirements
+
+The Hermes container is configured `read_only: true` (see `docker-compose.yml`). Operators using
+plain `docker run` instead of compose **must** supply the same hardening flags or the container
+will fail to start when it tries to write logs/temp files:
+
+```bash
+docker run --rm \
+  --read-only \
+  --tmpfs /tmp \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  -p 8085:8085 \
+  -e NATS_URL=nats://host:4222 \
+  ghcr.io/homericintelligence/projecthermes:<tag>
+```
+
+The `--tmpfs /tmp` mount is required by the Python interpreter and Uvicorn for ephemeral state.
+
 ## CI/CD
 
 Docker images are published to GHCR (`ghcr.io/<org>/projecthermes`) **only on version tags**
