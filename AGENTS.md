@@ -93,7 +93,7 @@ Unauthorized`.
 
 > **Forward-compatible only:** `task.updated`, `task.completed`, and `task.failed` are accepted by
 > Hermes for forward-compatibility, but the upstream service does **not yet emit them**. Consumers
-> should not rely on receiving these events today. See [§3 — Not Yet Integrated](#-3--downstream-consumers)
+> should not rely on receiving these events today. See [§3 — Not Yet Integrated](#not-yet-integrated)
 > and [Odysseus#33](https://github.com/HomericIntelligence/Odysseus/issues/33).
 
 Unknown event types are routed to `hi.deadletter.{sanitized-event}` when
