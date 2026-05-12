@@ -112,6 +112,29 @@ Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webho
    hyphens, dots become hyphens, and wildcards (`*` and `>`) are stripped entirely. Tokens are
    lowercased and subject strings are typically capped at 64 characters.
 
+## Future Integrations
+
+### Agamemnon (deferred — fields removed per #324)
+
+`agamemnon_url` / `agamemnon_api_key` were intentionally removed as dead config (YAGNI). When
+Agamemnon integration is implemented, follow this pattern so it matches existing patterns in the
+codebase:
+
+- Add fields to `Settings` in `hermes/config.py`: `agamemnon_url: str | None = None`,
+  `agamemnon_api_key: SecretStr | None = None`, plus a `agamemnon_timeout: float = 5.0`
+  (validate `> 0`). Leaving the URL unset must keep Agamemnon dispatch fully disabled.
+- Hold a single `httpx.AsyncClient` for the lifetime of the app (constructed in `lifespan`,
+  closed in shutdown) — never construct per-request. Pass the connection-holding client through
+  `app.state` or a DI provider.
+- Plumb `agamemnon_timeout` into the client (`httpx.AsyncClient(timeout=...)`) rather than
+  hard-coding a value at the call site.
+- Surface health on `/health` (e.g. `agamemnon_reachable: bool`) only when `agamemnon_url` is
+  configured — do not regress the no-Agamemnon happy path.
+- Authenticate via `Authorization: Bearer ${AGAMEMNON_API_KEY}`. Never log the key.
+
+If the design evolves significantly, capture the decision in a new ADR rather than changing this
+note.
+
 ## Container Runtime Requirements
 
 The Hermes container is configured `read_only: true` (see `docker-compose.yml`). Operators using
