@@ -35,9 +35,12 @@ Hermes (FastAPI — this service)
     ▼
 NATS JetStream
     │
-    ├──► hi.agents.>     → Argus (observability), Agamemnon (coordination)
+    ├──► hi.agents.>     → Argus (observability)
     ├──► hi.tasks.>      → Telemachy (workflow engine)
     └──► hi.deadletter.> → unknown / unroutable events
+
+Hermes also issues a synchronous HTTP call to Agamemnon (out-of-band from NATS)
+on webhook receipt — see §3 below.
 ```
 
 ---

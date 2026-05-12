@@ -25,11 +25,13 @@ NATS JetStream (via ProjectKeystone)
     │  hi.agents.{host}.{name}.{event}
     │  hi.tasks.{team_id}.{task_id}.{event}
     │
-    ├──► Argus      (observability)
-    ├──► Agamemnon  (coordination)
-    ├──► Telemachy  (workflow engine)
+    ├──► Argus      (observability — NATS subscriber)
+    ├──► Telemachy  (workflow engine — NATS subscriber)
     │
     └──► homeric-deadletter (unknown event types)
+
+(Agamemnon is **not** a NATS subscriber — Hermes calls it directly via HTTP on
+webhook receipt; see AGENTS.md §3.)
 ```
 
 **Subject schema:**
