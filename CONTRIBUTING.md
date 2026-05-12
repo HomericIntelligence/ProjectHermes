@@ -165,6 +165,28 @@ just health
 
 ```
 
+### Bumping the NATS Image Digest
+
+`docker-compose.yml` and the `integration-tests` job in `.github/workflows/_required.yml` both
+pin the NATS image to an immutable `@sha256:<digest>`. Bump the digest monthly (or sooner when a
+CVE scan flags the running image):
+
+```bash
+# 1. Pull the desired tag
+docker pull nats:2.14
+
+# 2. Read the new digest
+docker inspect --format '{{index .RepoDigests 0}}' nats:2.14
+
+# 3. Update BOTH files atomically in the same PR:
+#    - docker-compose.yml  (services.nats.image)
+#    - .github/workflows/_required.yml  (integration-tests "Start NATS with JetStream")
+# Then commit and open a PR titled "chore(deps): bump nats image digest".
+```
+
+If you bump only one file, `just docker-up` and the integration-tests CI job will end up running
+different NATS versions. The `forbid-suppressions` lint guard does not catch this — verify by hand.
+
 ### Python Conventions
 
 - **Python version**: 3.10+ (managed by pixi)
