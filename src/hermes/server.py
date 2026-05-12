@@ -228,6 +228,13 @@ async def _require_dead_letter_key(
 
     When ``dead_letter_api_key`` is unset the check is bypassed (opt-in).
     A timing-safe comparison prevents key enumeration via response timing.
+
+    .. note::
+       Use ``str = Header(default="")`` rather than ``Annotated[str, Header()]`` here. With
+       ``from __future__ import annotations`` (active in this module), ``Annotated`` parameters
+       are evaluated as forward references inside FastAPI's ``Depends()`` machinery and raise
+       ``PydanticUserError`` at app startup on Python 3.14+. The plain default-arg form sidesteps
+       the forward-reference resolution entirely. See issue #518.
     """
     if not settings.dead_letter_api_key:
         return
