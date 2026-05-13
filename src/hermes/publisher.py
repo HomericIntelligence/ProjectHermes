@@ -96,6 +96,8 @@ class Publisher:
                 connect_timeout,
                 settings.nats_reconnect_interval,
                 settings.nats_reconnect_hard_timeout,
+                max_interval=settings.nats_reconnect_max_interval,
+                jitter=settings.nats_reconnect_jitter,
             )
         )
 
@@ -132,30 +134,64 @@ class Publisher:
         connect_timeout: float,
         reconnect_interval: float,
         hard_timeout: float,
+        max_interval: float | None = None,
+        jitter: float = 0.0,
     ) -> None:
-        """Background task: detect NATS connection loss and attempt to reconnect."""
+        """Background task: detect NATS connection loss and attempt to reconnect.
+
+        Uses bounded exponential backoff between *failed* reconnect attempts:
+        ``delay = min(reconnect_interval * 2**failed_attempts, max_interval)``
+        with optional multiplicative jitter.  The ``failed_attempts`` counter
+        is reset to zero whenever a reconnect succeeds or whenever the
+        connection is observed to be alive at the top of an iteration, so a
+        single transient blip does not penalise subsequent recoveries.
+
+        ``max_interval=None`` disables the cap (falls back to
+        ``reconnect_interval``, matching the legacy fixed-interval behaviour
+        on the first attempt).  ``jitter=0`` produces a deterministic delay.
+        """
+        cap = max_interval if max_interval is not None else reconnect_interval
+        # ``failed_attempts`` is the *exponent* used for the next sleep.  We
+        # bump it after a failed reconnect (so the next wait is longer) and
+        # reset it on success or when the connection is observed healthy.
+        failed_attempts = 0
         while not self._stop_event.is_set():
+            delay = min(reconnect_interval * (2**failed_attempts), cap)
+            if jitter > 0:
+                delay *= random.uniform(1.0 - jitter, 1.0 + jitter)
             try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=reconnect_interval)
+                await asyncio.wait_for(self._stop_event.wait(), timeout=delay)
                 return  # stop_event fired during sleep
             except asyncio.TimeoutError:
                 pass
             if self._stop_event.is_set():
                 return
             if self._nc is not None and not self._nc.is_closed:
-                continue  # connection still alive
-            logger.warning("NATS connection lost; attempting reconnect")
+                failed_attempts = 0  # connection healthy — reset backoff
+                continue
+            logger.warning(
+                "NATS connection lost; attempting reconnect (failed_attempts=%d, last_delay=%.3fs)",
+                failed_attempts,
+                delay,
+            )
             try:
                 await asyncio.wait_for(
                     self._connect_internal(url, connect_timeout), timeout=hard_timeout
                 )
                 self.reconnect_count += 1
+                failed_attempts = 0
                 NATS_RECONNECTS.labels(result="success").inc()
                 logger.info("NATS reconnected via external loop (count=%d)", self.reconnect_count)
             except Exception as exc:
                 self.last_error = str(exc)
+                # Saturate the exponent once the cap is reached so 2**n doesn't
+                # overflow into absurd values during very long outages.  At
+                # base=5s and cap=60s the cap binds at attempt=4, so 32 leaves
+                # plenty of headroom while staying bounded.
+                if failed_attempts < 32:
+                    failed_attempts += 1
                 NATS_RECONNECTS.labels(result="failed").inc()
-                logger.error("NATS reconnect failed: %s", exc)
+                logger.error("NATS reconnect failed (failed_attempts=%d): %s", failed_attempts, exc)
 
     async def _ensure_streams(self) -> None:
         """Create JetStream streams if they don't exist yet."""

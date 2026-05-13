@@ -61,6 +61,17 @@ class Settings(BaseSettings):
     publish_retry_base_delay: float = Field(default=0.1, gt=0)
     nats_reconnect_interval: float = Field(default=5.0, gt=0)
     nats_reconnect_hard_timeout: float = Field(default=5.0, gt=0)
+    # Cap for the exponential backoff between failed reconnect attempts.  Once the
+    # computed delay (``nats_reconnect_interval * 2**attempt``) reaches this value,
+    # further failures wait at most ``nats_reconnect_max_interval`` seconds between
+    # attempts.  This prevents reconnect storms when NATS is down for extended
+    # periods and tames the linear growth of ``NATS_RECONNECTS{result='failed'}``.
+    nats_reconnect_max_interval: float = Field(default=60.0, gt=0)
+    # Multiplicative jitter applied to the computed backoff delay; the final delay
+    # is sampled uniformly from ``[delay * (1 - jitter), delay * (1 + jitter)]``.
+    # Set to ``0`` to disable jitter (deterministic backoff).  Bounded to ``< 1``
+    # so the lower bound stays positive.
+    nats_reconnect_jitter: float = Field(default=0.1, ge=0, lt=1)
 
     @field_validator("hermes_public_url", mode="before")
     @classmethod
@@ -73,6 +84,21 @@ class Settings(BaseSettings):
         if parsed.scheme not in ("http", "https"):
             raise ValueError(f"HERMES_PUBLIC_URL must be http or https, got: {v!r}")
         return v.rstrip("/")
+
+    @model_validator(mode="after")
+    def _validate_reconnect_backoff_bounds(self) -> "Settings":
+        """Ensure the backoff cap is at least as large as the base interval.
+
+        A cap below the base would clamp the very first retry, producing the same
+        constant-interval reconnect storm this setting was introduced to prevent.
+        """
+        if self.nats_reconnect_max_interval < self.nats_reconnect_interval:
+            raise ValueError(
+                "NATS_RECONNECT_MAX_INTERVAL must be >= NATS_RECONNECT_INTERVAL "
+                f"(got max={self.nats_reconnect_max_interval}, "
+                f"base={self.nats_reconnect_interval})"
+            )
+        return self
 
     @model_validator(mode="after")
     def _set_public_url_default(self) -> "Settings":
@@ -104,9 +130,7 @@ class Settings(BaseSettings):
     def _validate_rate_limit_key(cls, v: str) -> str:
         allowed = {"ip", "endpoint"}
         if v not in allowed:
-            raise ValueError(
-                f"WEBHOOK_RATE_LIMIT_KEY must be one of {sorted(allowed)}, got: {v!r}"
-            )
+            raise ValueError(f"WEBHOOK_RATE_LIMIT_KEY must be one of {sorted(allowed)}, got: {v!r}")
         return v
 
     @field_validator("webhook_secret")
