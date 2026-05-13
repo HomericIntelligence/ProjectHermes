@@ -661,16 +661,25 @@ class TestReconnectLifecycle:
         finally:
             await pub2.disconnect()
 
-    async def test_reconnect_count_increments_via_callback(self, nats_url: str) -> None:
-        """Manually invoking the reconnected callback increments reconnect_count."""
+    async def test_reconnect_count_not_incremented_by_nats_callback(
+        self, nats_url: str
+    ) -> None:
+        """Regression for issue #526.
+
+        The nats-py ``reconnected_cb`` must not touch ``reconnect_count``; only
+        the ``_reconnect_loop`` success path increments it. This prevents a
+        single reconnect from being counted twice if nats-py ever fires the
+        callback (e.g. if ``allow_reconnect`` is flipped to True).
+        """
         pub = Publisher()
         await pub.connect(nats_url)
         try:
             assert pub.reconnect_count == 0
-            # Simulate the nats-py internal reconnect callback being fired.
-            pub._connected = True
-            pub.reconnect_count += 1
-            assert pub.reconnect_count == 1
+            # The callback is closed over inside _connect_internal; we cannot
+            # reach it from outside, but the contract is verified in the unit
+            # test ``test_reconnected_cb_does_not_increment_reconnect_count``.
+            # Here we just assert the steady-state invariant.
+            assert pub.reconnect_count == 0
         finally:
             await pub.disconnect()
 

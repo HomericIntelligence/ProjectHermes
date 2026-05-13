@@ -168,7 +168,50 @@ class TestReconnectLoopRetriesOnLostConnection:
             pub._stop_event.set()
             await loop_task
 
-        assert pub.reconnect_count > initial_count
+        assert pub.reconnect_count == initial_count + 1
+
+    @pytest.mark.asyncio
+    async def test_reconnect_count_no_double_increment_if_callback_fires(self) -> None:
+        """Regression for issue #526.
+
+        A single successful reconnect must increment ``reconnect_count`` by
+        exactly 1, even if nats-py also invokes the ``reconnected_cb`` callback
+        (which it would do if ``allow_reconnect`` were ever changed to True).
+        """
+        pub = Publisher()
+        call_count = 0
+        reconnected: asyncio.Event = asyncio.Event()
+        captured_callbacks: dict[str, object] = {}
+
+        async def fake_connect(url: str, **kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            captured_callbacks.update(kwargs)
+            if call_count > 1:
+                reconnected.set()
+                pub._stop_event.set()
+            return _make_mock_nc(closed=False)
+
+        with patch("nats.connect", side_effect=fake_connect):
+            await pub.connect("nats://localhost:4222")
+            initial_count = pub.reconnect_count
+
+            # Simulate connection loss
+            pub._nc = _make_mock_nc(closed=True)
+
+            pub._stop_event = asyncio.Event()
+            loop_task = asyncio.ensure_future(
+                pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
+            )
+            await asyncio.wait_for(reconnected.wait(), timeout=5.0)
+            # Simulate nats-py firing the reconnected_cb in addition to the
+            # external reconnect loop succeeding (the double-fire scenario).
+            await captured_callbacks["reconnected_cb"]()  # type: ignore[operator]
+            pub._stop_event.set()
+            await loop_task
+
+        # Exactly one increment despite both the loop AND the callback firing.
+        assert pub.reconnect_count == initial_count + 1
 
     @pytest.mark.asyncio
     async def test_last_error_set_on_failed_reconnect(self) -> None:
