@@ -165,6 +165,38 @@ class TestHealthEndpoint:
         assert isinstance(body["nats_retry_interval"], float)
         assert body["nats_retry_interval"] == 5.0
 
+    def test_health_includes_dead_letter_queue_depth_gauge(self) -> None:
+        """Issue #531: surface dead_letter_queue_depth gauge in /health."""
+        from hermes.publisher import Publisher
+        from hermes.server import app
+
+        mock_publisher = MagicMock(spec=Publisher)
+        mock_publisher.is_connected = True
+        mock_publisher.active_subjects = []
+        mock_publisher.dead_letter_count = 42
+        mock_publisher.reconnect_count = 0
+        mock_publisher.last_error = ""
+        mock_publisher.publish = AsyncMock()
+        app.state.publisher = mock_publisher
+
+        client = TestClient(app, raise_server_exceptions=True)
+        body = client.get("/health").json()
+        assert "dead_letter_queue_depth" in body
+        assert body["dead_letter_queue_depth"] == 42
+        assert "dead_letter_queue_capacity" in body
+        # default DEAD_LETTER_MAX_SIZE = 1000
+        assert body["dead_letter_queue_capacity"] == 1000
+        assert "dead_letter_queue_alert_threshold_pct" in body
+        # 42 / 1000 * 100 == 4.2
+        assert body["dead_letter_queue_alert_threshold_pct"] == pytest.approx(4.2)
+
+    def test_health_dead_letter_threshold_pct_zero_when_empty(self) -> None:
+        """alert_threshold_pct is 0.0 when no dead-letters are queued."""
+        client = _build_client()
+        body = client.get("/health").json()
+        assert body["dead_letter_queue_depth"] == 0
+        assert body["dead_letter_queue_alert_threshold_pct"] == 0.0
+
 
 class TestReadyEndpoint:
     def test_ready_returns_200_when_connected(self) -> None:

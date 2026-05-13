@@ -238,7 +238,9 @@ async def _require_dead_letter_key(
     """
     if not settings.dead_letter_api_key:
         return
-    if not x_dead_letter_key or not hmac.compare_digest(x_dead_letter_key, settings.dead_letter_api_key):
+    if not x_dead_letter_key or not hmac.compare_digest(
+        x_dead_letter_key, settings.dead_letter_api_key
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing dead-letter API key",
@@ -314,6 +316,9 @@ async def health(response: Response) -> HealthResponse:
     if not connected:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     cfg = get_settings()
+    dl_depth = publisher.dead_letter_count
+    dl_capacity = cfg.dead_letter_max_size
+    dl_threshold_pct = (dl_depth / dl_capacity) * 100.0 if dl_capacity > 0 else 0.0
     return HealthResponse(
         status="ok" if connected else "degraded",
         nats_connected=connected,
@@ -321,7 +326,10 @@ async def health(response: Response) -> HealthResponse:
         hmac_validation_enabled=bool(cfg.webhook_secret),
         hermes_public_url=cfg.hermes_public_url,
         inflight_requests=_inflight,
-        dead_letter_count=publisher.dead_letter_count,
+        dead_letter_count=dl_depth,
+        dead_letter_queue_depth=dl_depth,
+        dead_letter_queue_capacity=dl_capacity,
+        dead_letter_queue_alert_threshold_pct=dl_threshold_pct,
         timeouts=TimeoutSettings(
             nats_connect=cfg.nats_connect_timeout,
             nats_publish=cfg.nats_publish_timeout,
@@ -426,7 +434,9 @@ async def _handle_webhook(request: Request, settings: Settings) -> WebhookAccept
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Unknown event type: {exc}",
             ) from exc
-        return WebhookAcceptedResponse(status="accepted", event=payload.event, request_id=request_id)
+        return WebhookAcceptedResponse(
+            status="accepted", event=payload.event, request_id=request_id
+        )
 
 
 @app.get(
@@ -469,8 +479,7 @@ async def dead_letters(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"limit must not exceed {settings.dead_letter_page_size_max}; "
-                f"got {effective_limit}"
+                f"limit must not exceed {settings.dead_letter_page_size_max}; got {effective_limit}"
             ),
         )
     publisher: Publisher = app.state.publisher

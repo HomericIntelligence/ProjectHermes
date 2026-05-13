@@ -183,9 +183,19 @@
     "/dead-letters": {
       "get": {
         "summary": "Dead Letters",
-        "description": "Return the in-memory dead-letter queue with optional pagination.\n\nQuery params:\n- ``offset``: number of items to skip (default 0).\n- ``limit``: maximum number of items to return (default: all).",
+        "description": "Return the in-memory dead-letter queue with optional pagination.\n\nQuery params:\n- ``offset``: number of items to skip (default 0).\n- ``limit``: maximum items to return (default: ``dead_letter_page_size_default``;\n  hard ceiling: ``dead_letter_page_size_max``).",
         "operationId": "dead_letters_dead_letters_get",
         "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          },
           {
             "name": "limit",
             "in": "query",
@@ -203,13 +213,13 @@
             }
           },
           {
-            "name": "offset",
-            "in": "query",
+            "name": "x-dead-letter-key",
+            "in": "header",
             "required": false,
             "schema": {
-              "type": "integer",
-              "default": 0,
-              "title": "Offset"
+              "type": "string",
+              "default": "",
+              "title": "X-Dead-Letter-Key"
             }
           }
         ],
@@ -240,6 +250,18 @@
         "summary": "Drain Dead Letters",
         "description": "Drain (clear) the in-memory dead-letter queue and return the count of drained items.",
         "operationId": "drain_dead_letters_dead_letters_delete",
+        "parameters": [
+          {
+            "name": "x-dead-letter-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "X-Dead-Letter-Key"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -251,6 +273,16 @@
                     "type": "integer"
                   },
                   "title": "Response Drain Dead Letters Dead Letters Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -406,6 +438,21 @@
             "title": "Dead Letter Count",
             "default": 0
           },
+          "dead_letter_queue_depth": {
+            "type": "integer",
+            "title": "Dead Letter Queue Depth",
+            "default": 0
+          },
+          "dead_letter_queue_capacity": {
+            "type": "integer",
+            "title": "Dead Letter Queue Capacity",
+            "default": 0
+          },
+          "dead_letter_queue_alert_threshold_pct": {
+            "type": "number",
+            "title": "Dead Letter Queue Alert Threshold Pct",
+            "default": 0.0
+          },
           "timeouts": {
             "anyOf": [
               {
@@ -481,17 +528,12 @@
           "nats_publish": {
             "type": "number",
             "title": "Nats Publish"
-          },
-          "agamemnon": {
-            "type": "number",
-            "title": "Agamemnon"
           }
         },
         "type": "object",
         "required": [
           "nats_connect",
-          "nats_publish",
-          "agamemnon"
+          "nats_publish"
         ],
         "title": "TimeoutSettings",
         "description": "Timeout values (seconds) surfaced in /health for observability."
@@ -559,12 +601,17 @@
           "event": {
             "type": "string",
             "title": "Event"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
           }
         },
         "type": "object",
         "required": [
           "status",
-          "event"
+          "event",
+          "request_id"
         ],
         "title": "WebhookAcceptedResponse",
         "description": "Response body for POST /webhook (202 Accepted)."
