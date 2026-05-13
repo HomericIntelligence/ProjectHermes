@@ -303,7 +303,7 @@ jobs:
         # Do NOT make the Run Gitleaks step itself non-fatal — that would let leaked secrets
         # silently merge to main. The forbid-suppressions guard would also reject any such opt-out.
         if: always() && hashFiles('gitleaks.sarif') != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: gitleaks-report
           path: gitleaks.sarif
