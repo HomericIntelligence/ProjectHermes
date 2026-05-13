@@ -41,6 +41,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+      # Defense-in-depth: if PYTHONDONTWRITEBYTECODE is overridden at runtime,
+      # Python would otherwise fail to write .pyc files under the read-only FS.
+      - /app/__pycache__
     cap_drop:
       - ALL
     security_opt:
