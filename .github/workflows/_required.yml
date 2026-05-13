@@ -251,6 +251,21 @@ jobs:
           TEST_NATS_URL: nats://localhost:4222
         run: pixi run pytest -m integration -v
 
+  readonly-fs-smoke:
+    name: readonly-fs-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: lint
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Run read-only filesystem smoke test
+        env:
+          WEBHOOK_SECRET: smoke-test-secret-for-readonly-fs-min32
+        run: bash scripts/smoke-readonly-fs.sh
+
   security-dependency-scan:
     name: security/dependency-scan
     runs-on: ubuntu-24.04

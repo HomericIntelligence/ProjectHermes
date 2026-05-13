@@ -91,6 +91,10 @@ docker-up:
 docker-down:
     docker compose down
 
+# Run the read-only filesystem integration smoke test (boots docker-compose stack)
+smoke-readonly-fs:
+    bash scripts/smoke-readonly-fs.sh
+
 # === Documentation ===
 
 # Regenerate the committed OpenAPI spec (openapi.json) from the FastAPI app

@@ -46,3 +46,44 @@ def test_deploy_resources_reservations_memory(compose: dict, service: str) -> No
     reservations = compose["services"][service]["deploy"]["resources"]["reservations"]
     assert "memory" in reservations, f"{service}: missing memory reservation"
     assert reservations["memory"], f"{service}: memory reservation must be non-empty"
+
+
+# ---------------------------------------------------------------------------
+# Read-only filesystem enforcement (regression guard for issue #570)
+# ---------------------------------------------------------------------------
+
+
+def test_hermes_service_is_read_only(compose: dict) -> None:
+    """The hermes service must run with a read-only root filesystem.
+
+    Regression guard for #570 and the read-only FS smoke test
+    (`scripts/smoke-readonly-fs.sh`). If this flag is ever removed, the
+    smoke test will start failing — but this unit test catches the
+    regression at PR time without requiring Docker.
+    """
+    hermes = compose["services"]["hermes"]
+    assert hermes.get("read_only") is True, (
+        "hermes service must set `read_only: true` (security hardening, issue #570)"
+    )
+
+
+def test_hermes_service_has_tmpfs_tmp(compose: dict) -> None:
+    """The hermes service must expose a writable tmpfs at /tmp.
+
+    Required because `read_only: true` makes the root FS immutable, and
+    several Python stdlib paths still need a writable scratch dir.
+    """
+    hermes = compose["services"]["hermes"]
+    tmpfs = hermes.get("tmpfs") or []
+    assert any(entry == "/tmp" or entry.startswith("/tmp:") for entry in tmpfs), (
+        "hermes service must declare `tmpfs: [/tmp]` to pair with `read_only: true`"
+    )
+
+
+def test_smoke_readonly_fs_script_exists_and_executable() -> None:
+    """The read-only FS smoke test script must exist and be executable."""
+    script = COMPOSE_PATH.parent / "scripts" / "smoke-readonly-fs.sh"
+    assert script.is_file(), f"missing smoke test: {script}"
+    import os
+
+    assert os.access(script, os.X_OK), f"smoke test not executable: {script}"
