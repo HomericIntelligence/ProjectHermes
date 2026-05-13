@@ -222,6 +222,89 @@ class TestPublisherSubjectCap:
         assert len(pub._active_subjects) == cap
 
 
+class TestRequireAdminKeyIsolated:
+    """Isolated unit tests for ``_require_dead_letter_key`` (issue #580).
+
+    These tests call the dependency function directly with a freshly-constructed
+    ``Settings`` instance per case, so they do not rely on (or mutate) the
+    ``get_settings()`` LRU-cached singleton.  This avoids test-order coupling
+    flagged in #580 / #360.
+
+    Covered paths:
+      * ``dead_letter_api_key`` set + correct key  -> returns ``None``
+      * ``dead_letter_api_key`` set + wrong key    -> raises ``HTTPException(401)``
+      * ``dead_letter_api_key`` set + missing key  -> raises ``HTTPException(401)``
+      * ``dead_letter_api_key`` unset              -> auth bypassed (returns ``None``)
+    """
+
+    _KEY = "isolated-test-dead-letter-key-xxxxx"  # 37 chars, satisfies >=32 validator
+
+    @staticmethod
+    def _call(
+        key_configured: str, header_value: str
+    ) -> None:
+        """Invoke ``_require_dead_letter_key`` with an isolated Settings instance."""
+        import asyncio
+
+        from hermes.config import Settings
+        from hermes.server import _require_dead_letter_key
+
+        settings = Settings(dead_letter_api_key=key_configured)
+        asyncio.run(_require_dead_letter_key(settings=settings, x_dead_letter_key=header_value))
+
+    def test_correct_key_passes(self) -> None:
+        # Should not raise.
+        self._call(self._KEY, self._KEY)
+
+    def test_wrong_key_raises_401(self) -> None:
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as excinfo:
+            self._call(self._KEY, "definitely-not-the-right-key")
+        assert excinfo.value.status_code == 401
+        assert "WWW-Authenticate" in excinfo.value.headers
+        assert excinfo.value.headers["WWW-Authenticate"].startswith("Bearer")
+
+    def test_missing_key_raises_401(self) -> None:
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as excinfo:
+            self._call(self._KEY, "")
+        assert excinfo.value.status_code == 401
+        assert "WWW-Authenticate" in excinfo.value.headers
+
+    def test_unset_key_bypasses_auth(self) -> None:
+        """When ``dead_letter_api_key`` is unset the check is bypassed (documented contract)."""
+        # Should not raise even though header is empty.
+        self._call("", "")
+
+    def test_unset_key_bypasses_auth_even_with_header(self) -> None:
+        """An unconfigured server ignores any header value (allow-all path)."""
+        # Should not raise even though a header is presented.
+        self._call("", "some-random-attacker-supplied-value")
+
+    def test_does_not_mutate_get_settings_singleton(self) -> None:
+        """Regression: isolated tests must not touch the cached ``get_settings()``.
+
+        Guards the test-isolation issue from #580: if these tests ever start
+        mutating the singleton, the next test in the file (or any later test)
+        could see a stale ``dead_letter_api_key`` and fail intermittently.
+        """
+        from fastapi import HTTPException
+
+        from hermes.config import get_settings
+
+        before = get_settings().dead_letter_api_key
+        self._call(self._KEY, self._KEY)
+        with pytest.raises(HTTPException):
+            self._call(self._KEY, "wrong")
+        after = get_settings().dead_letter_api_key
+        assert before == after, (
+            "Isolated _require_dead_letter_key tests must not mutate the "
+            "get_settings() singleton (see #580)."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
