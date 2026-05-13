@@ -5,9 +5,11 @@
 FROM python:3.12-slim@sha256:ec948fa5f90f4f8907e89f4800cfd2d2e91e391a4bce4a6afa77ba265bc3a2fe AS builder
 WORKDIR /build
 COPY pyproject.toml .
-RUN pip install --no-cache-dir \
-    $(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print(' '.join(repr(s) for s in d['project']['dependencies']))") \
-    --target /build/deps
+# Extract runtime deps to a newline-delimited requirements list, then feed pip via stdin.
+# Avoids shell-quoting hazards from version specifiers like `<1` (shell redirects) or
+# bare `repr()` output (pip rejects `'fastapi>=0.115,<1'` as quoted package name).
+RUN python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print('\n'.join(d['project']['dependencies']))" > /tmp/requirements.txt \
+    && pip install --no-cache-dir --target /build/deps -r /tmp/requirements.txt
 
 FROM python:3.12-slim@sha256:ec948fa5f90f4f8907e89f4800cfd2d2e91e391a4bce4a6afa77ba265bc3a2fe
 WORKDIR /app
