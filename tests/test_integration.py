@@ -685,6 +685,109 @@ class TestReconnectLifecycle:
 
 
 # ---------------------------------------------------------------------------
+# Issue #525 — exponential backoff in reconnect loop
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestReconnectBackoffIntegration:
+    """Drive ``Publisher._reconnect_loop`` against a real NATS server to cover
+    the new exponential-backoff code paths under the integration coverage
+    gate (issue #525).  These complement the pure-unit tests in
+    ``tests/test_publisher_reconnect_backoff.py`` that mock NATS entirely.
+    """
+
+    async def test_loop_resets_backoff_when_connection_healthy(
+        self, nats_url: str
+    ) -> None:
+        """A healthy NATS connection makes the loop hit the
+        ``failed_attempts = 0; continue`` reset branch on every iteration.
+
+        We start the loop with tiny intervals + jitter so the very first
+        iteration executes the jitter multiplication path (line 161), waits
+        briefly, observes the healthy ``nc`` (lines 169-171), and loops.
+        After a short delay we set ``_stop_event`` and assert clean shutdown
+        without any reconnect attempts (``reconnect_count`` stays at 0).
+        """
+        pub = Publisher()
+        await pub.connect(nats_url)
+        try:
+            pub._stop_event = asyncio.Event()
+            # Run a *fresh* loop with extremely short tick so we cover the
+            # delay/jitter/healthy-reset path many times in a few hundred ms.
+            loop_task = asyncio.create_task(
+                pub._reconnect_loop(
+                    nats_url,
+                    connect_timeout=1.0,
+                    reconnect_interval=0.01,
+                    hard_timeout=1.0,
+                    max_interval=0.05,
+                    jitter=0.1,
+                )
+            )
+            await asyncio.sleep(0.1)
+            assert not loop_task.done(), "loop terminated unexpectedly"
+            assert pub.reconnect_count == 0, (
+                "reset branch must not increment reconnect_count"
+            )
+            pub._stop_event.set()
+            await asyncio.wait_for(loop_task, timeout=2.0)
+        finally:
+            await pub.disconnect()
+
+    async def test_loop_recovers_after_transient_disconnect(
+        self, nats_url: str
+    ) -> None:
+        """Forcibly close the underlying NATS client so the loop enters the
+        reconnect-attempt branch (lines 172-194), then succeeds against the
+        live server and resets the backoff exponent (line 182).
+        """
+        pub = Publisher()
+        await pub.connect(nats_url)
+        try:
+            # Stop the existing reconnect task so we can drive a fresh loop.
+            pub._stop_event.set()
+            assert pub._reconnect_task is not None
+            try:
+                await asyncio.wait_for(pub._reconnect_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            pub._reconnect_task = None
+
+            # Force the publisher into the "connection lost" state.
+            assert pub._nc is not None
+            await pub._nc.close()
+            assert pub._nc.is_closed
+
+            pub._stop_event = asyncio.Event()
+            loop_task = asyncio.create_task(
+                pub._reconnect_loop(
+                    nats_url,
+                    connect_timeout=2.0,
+                    reconnect_interval=0.02,
+                    hard_timeout=2.0,
+                    max_interval=0.1,
+                    jitter=0.0,
+                )
+            )
+
+            # Poll until the loop has successfully reconnected once.
+            deadline = asyncio.get_event_loop().time() + 5.0
+            while asyncio.get_event_loop().time() < deadline:
+                if pub.reconnect_count >= 1 and pub._nc is not None and not pub._nc.is_closed:
+                    break
+                await asyncio.sleep(0.05)
+
+            pub._stop_event.set()
+            await asyncio.wait_for(loop_task, timeout=2.0)
+
+            assert pub.reconnect_count >= 1, "loop never recorded a successful reconnect"
+        finally:
+            # ``disconnect`` is safe even if we already replaced _nc.
+            await pub.disconnect()
+
+
+# ---------------------------------------------------------------------------
 # Issue #147 — lifespan abort / degraded state
 # ---------------------------------------------------------------------------
 
