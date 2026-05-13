@@ -83,13 +83,37 @@ class Publisher:
     # ------------------------------------------------------------------
 
     async def connect(self, url: str, connect_timeout: float = 5.0) -> None:
-        """Connect to NATS, ensure streams exist, and start the background reconnect loop."""
+        """Connect to NATS, ensure streams exist, and start the background reconnect loop.
+
+        ``_stop_event`` is owned by the Publisher instance for its full lifetime
+        (see issue #524).  It is cleared — not replaced — on each ``connect()`` so
+        that any pre-existing references (for example, from a stale
+        ``_reconnect_task`` left over after a failed startup) still observe
+        ``set()`` from ``disconnect()``.  If a previous reconnect task is still
+        running, it is cancelled before a new one is started so we never have two
+        concurrent loops racing on the same event.
+        """
         from hermes.config import get_settings
 
         settings = get_settings()
         await self._connect_internal(url, connect_timeout)
         logger.info("Connected to NATS at %s", url)
-        self._stop_event = asyncio.Event()
+
+        # Cancel any pre-existing reconnect task (e.g. from a previous connect()
+        # that was not followed by disconnect()) to avoid two loops running on
+        # the same _stop_event.
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._reconnect_task = None
+
+        # Reuse the existing Event (created in __init__) — only clear it.
+        # Never rebind self._stop_event here, otherwise a stale task started
+        # in a previous connect() would hold the old Event forever.
+        self._stop_event.clear()
         self._reconnect_task = asyncio.ensure_future(
             self._reconnect_loop(
                 url,

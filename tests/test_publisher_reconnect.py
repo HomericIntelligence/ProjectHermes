@@ -364,3 +364,79 @@ class TestConnectInternalExtracted:
 
         mock_conn.assert_called_once()
         await pub.disconnect()
+
+
+class TestStopEventLifetime:
+    """Regression coverage for #524 — _stop_event identity must survive reconnect()."""
+
+    @pytest.mark.asyncio
+    async def test_stop_event_identity_preserved_across_reconnect(self) -> None:
+        """Calling connect() twice without disconnect() must reuse the same Event.
+
+        Otherwise a stale _reconnect_task spawned by the first connect() holds a
+        reference to the old Event and would never observe stop_event.set().
+        """
+        pub = Publisher()
+        original_event = pub._stop_event
+
+        mock_nc1 = _make_mock_nc()
+        await _do_connect(pub, mock_nc1)
+        assert pub._stop_event is original_event, (
+            "connect() must not replace _stop_event"
+        )
+
+        # Second connect() without intervening disconnect() (simulates retry
+        # after a startup failure described in #524).
+        mock_nc2 = _make_mock_nc()
+        await _do_connect(pub, mock_nc2)
+        assert pub._stop_event is original_event, (
+            "second connect() must not replace _stop_event"
+        )
+
+        # And disconnect() must still cleanly stop the (latest) loop via the
+        # shared Event.
+        await pub.disconnect()
+        assert pub._stop_event is original_event
+        assert pub._stop_event.is_set()
+
+    @pytest.mark.asyncio
+    async def test_double_connect_cancels_stale_reconnect_task(self) -> None:
+        """A second connect() must cancel the prior _reconnect_task.
+
+        Two concurrent loops sharing _stop_event would race on reconnect attempts
+        and double-increment metrics on every flap.
+        """
+        pub = Publisher()
+        mock_nc = _make_mock_nc()
+        await _do_connect(pub, mock_nc)
+        first_task = pub._reconnect_task
+        assert first_task is not None
+
+        await _do_connect(pub, _make_mock_nc())
+        second_task = pub._reconnect_task
+        assert second_task is not None
+        assert second_task is not first_task
+        assert first_task.done(), "stale reconnect task must be cancelled"
+
+        await pub.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_stop_event_cleared_on_reconnect(self) -> None:
+        """connect() after a prior disconnect() must re-arm (clear) the Event.
+
+        Otherwise the new _reconnect_loop sees stop_event already set and exits
+        immediately, leaving the publisher with no reconnect coverage.
+        """
+        pub = Publisher()
+        mock_nc = _make_mock_nc()
+        await _do_connect(pub, mock_nc)
+        await pub.disconnect()
+        assert pub._stop_event.is_set()
+
+        # Re-connect: stop_event must be cleared so the new loop can run.
+        await _do_connect(pub, _make_mock_nc())
+        assert not pub._stop_event.is_set()
+        assert pub._reconnect_task is not None
+        assert not pub._reconnect_task.done()
+
+        await pub.disconnect()

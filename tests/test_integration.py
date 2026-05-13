@@ -1195,3 +1195,77 @@ class TestJetStreamAck:
             await msg.ack()
         finally:
             await pub.disconnect()
+
+
+# ---------------------------------------------------------------------------
+# Issue #524 — _stop_event reuse across connect() calls
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestStopEventReuseIntegration:
+    """Cover the ``connect()`` stale-task cancellation and ``_stop_event`` reuse
+    branches against a live NATS server (issue #524).  The pure-unit tests in
+    ``tests/test_publisher_reconnect.py`` already verify the same logic with
+    mocks, but they do not contribute to the ``integration-tests`` coverage
+    gate — these complement them.
+    """
+
+    async def test_double_connect_reuses_stop_event_and_cancels_stale_task(
+        self, nats_url: str
+    ) -> None:
+        """A second ``connect()`` without intervening ``disconnect()`` must
+        reuse the same ``_stop_event`` instance AND cancel the prior
+        reconnect task (publisher.py lines 105-111 + 116).
+        """
+        pub = Publisher()
+        original_event = pub._stop_event
+        try:
+            await pub.connect(nats_url)
+            first_task = pub._reconnect_task
+            assert first_task is not None
+            assert not first_task.done()
+            assert pub._stop_event is original_event
+
+            # Second connect() exercises the cancel-stale-task branch.
+            await pub.connect(nats_url)
+            second_task = pub._reconnect_task
+            assert second_task is not None
+            assert second_task is not first_task
+            assert first_task.done(), "stale reconnect task must be cancelled"
+            assert pub._stop_event is original_event, (
+                "second connect() must not rebind _stop_event"
+            )
+            assert not pub._stop_event.is_set(), (
+                "connect() must clear the reused Event so the new loop can run"
+            )
+        finally:
+            await pub.disconnect()
+        # disconnect() sets the shared event, so the (still-original) Event
+        # instance must reflect that — proves identity preservation end-to-end.
+        assert pub._stop_event is original_event
+        assert pub._stop_event.is_set()
+
+    async def test_reconnect_after_disconnect_clears_stop_event(
+        self, nats_url: str
+    ) -> None:
+        """``connect()`` after ``disconnect()`` must clear the existing Event
+        so the new ``_reconnect_loop`` does not exit immediately
+        (publisher.py line 116, post-disconnect rearm path).
+        """
+        pub = Publisher()
+        original_event = pub._stop_event
+        await pub.connect(nats_url)
+        await pub.disconnect()
+        assert pub._stop_event.is_set()
+        assert pub._reconnect_task is None
+
+        # Reconnect: must re-arm (clear) the same Event so the new loop runs.
+        await pub.connect(nats_url)
+        try:
+            assert pub._stop_event is original_event
+            assert not pub._stop_event.is_set()
+            assert pub._reconnect_task is not None
+            assert not pub._reconnect_task.done()
+        finally:
+            await pub.disconnect()
