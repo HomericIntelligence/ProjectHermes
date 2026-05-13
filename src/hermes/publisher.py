@@ -64,7 +64,9 @@ class Publisher:
         s = get_settings()
         self._nc: NATSClient | None = None
         self._js: JetStreamContext | None = None
-        self._max_subjects: int = max_subjects if max_subjects is not None else s.active_subjects_max
+        self._max_subjects: int = (
+            max_subjects if max_subjects is not None else s.active_subjects_max
+        )
         self._active_subjects: OrderedDict[str, None] = OrderedDict()
         self._stream_names: list[str] = []
         self._dead_letters: deque[dict[str, Any]] = deque(maxlen=s.dead_letter_max_size)
@@ -166,9 +168,7 @@ class Publisher:
         jsm = self._nc.jsm()
 
         dead_letter_ttl = (
-            timedelta(seconds=s.dead_letter_ttl_seconds)
-            if s.dead_letter_ttl_seconds > 0
-            else None
+            timedelta(seconds=s.dead_letter_ttl_seconds) if s.dead_letter_ttl_seconds > 0 else None
         )
 
         stream_configs: list[tuple[str, list[str], dict[str, Any]]] = [
@@ -182,11 +182,27 @@ class Publisher:
         ]
 
         for name, subjects, extra in stream_configs:
+            desired_config = StreamConfig(name=name, subjects=subjects, **extra)
             try:
-                await jsm.stream_info(name)
+                info = await jsm.stream_info(name)
             except NotFoundError:
-                await jsm.add_stream(StreamConfig(name=name, subjects=subjects, **extra))
+                await jsm.add_stream(desired_config)
                 logger.info("Created JetStream stream: %s (%s)", name, subjects)
+            else:
+                # Migrate existing deployments: if max_age on disk differs from
+                # the desired value, push the updated config to NATS.  Without
+                # this, deployments created before a TTL change keep the old
+                # retention window (see issue #530, follow-up from #347).
+                desired_max_age = extra.get("max_age", 0) or 0
+                current_max_age = getattr(info.config, "max_age", 0) or 0
+                if float(desired_max_age) != float(current_max_age):
+                    await jsm.update_stream(desired_config)
+                    logger.info(
+                        "Updated JetStream stream %s: max_age %s -> %s",
+                        name,
+                        current_max_age,
+                        desired_max_age,
+                    )
             if name not in self._stream_names:
                 self._stream_names.append(name)
 

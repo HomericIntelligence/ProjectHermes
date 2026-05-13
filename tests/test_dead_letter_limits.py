@@ -222,9 +222,7 @@ class TestEnsureStreamsDeadLetterTTL:
         await pub._ensure_streams()
 
         calls = mock_jsm.add_stream.call_args_list
-        dead_letter_call = next(
-            c for c in calls if c.args[0].name == "homeric-deadletter"
-        )
+        dead_letter_call = next(c for c in calls if c.args[0].name == "homeric-deadletter")
         cfg = dead_letter_call.args[0]
         assert cfg.max_age == timedelta(seconds=3600).total_seconds()
 
@@ -250,11 +248,94 @@ class TestEnsureStreamsDeadLetterTTL:
         await pub._ensure_streams()
 
         calls = mock_jsm.add_stream.call_args_list
-        dead_letter_call = next(
-            c for c in calls if c.args[0].name == "homeric-deadletter"
-        )
+        dead_letter_call = next(c for c in calls if c.args[0].name == "homeric-deadletter")
         cfg = dead_letter_call.args[0]
         assert cfg.max_age is None
+
+
+# ---------------------------------------------------------------------------
+# Publisher: _ensure_streams updates existing dead-letter stream TTL (#530)
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureStreamsDeadLetterTTLMigration:
+    """_ensure_streams calls update_stream when the existing TTL differs (#530)."""
+
+    @pytest.mark.asyncio
+    async def test_update_called_when_existing_max_age_differs(self) -> None:
+        from hermes.config import get_settings
+        from hermes.publisher import Publisher
+
+        get_settings.cache_clear()
+        s = get_settings()
+        s.dead_letter_ttl_seconds = 3600
+
+        pub = Publisher()
+        mock_nc = MagicMock()
+        mock_jsm = AsyncMock()
+
+        # Existing stream returns a different max_age (e.g. previously 1800).
+        # stream_info must succeed (no NotFoundError) so the update path is taken.
+        existing_info = MagicMock()
+        existing_info.config = MagicMock(max_age=1800.0)
+
+        async def _stream_info(name: str) -> MagicMock:
+            return existing_info
+
+        mock_jsm.stream_info = AsyncMock(side_effect=_stream_info)
+        mock_jsm.add_stream = AsyncMock()
+        mock_jsm.update_stream = AsyncMock()
+        mock_nc.jsm = MagicMock(return_value=mock_jsm)
+        pub._nc = mock_nc
+
+        await pub._ensure_streams()
+
+        # add_stream should NOT be called for an existing stream
+        assert mock_jsm.add_stream.call_args_list == []
+
+        # update_stream must be called for the homeric-deadletter stream with
+        # the desired max_age (3600s).
+        update_calls = mock_jsm.update_stream.call_args_list
+        deadletter_updates = [c for c in update_calls if c.args[0].name == "homeric-deadletter"]
+        assert len(deadletter_updates) == 1
+        cfg = deadletter_updates[0].args[0]
+        assert cfg.max_age == timedelta(seconds=3600).total_seconds()
+
+    @pytest.mark.asyncio
+    async def test_update_skipped_when_existing_max_age_matches(self) -> None:
+        from hermes.config import get_settings
+        from hermes.publisher import Publisher
+
+        get_settings.cache_clear()
+        s = get_settings()
+        s.dead_letter_ttl_seconds = 3600
+
+        pub = Publisher()
+        mock_nc = MagicMock()
+        mock_jsm = AsyncMock()
+
+        # Existing stream already has the desired max_age — no update needed.
+        existing_info = MagicMock()
+        existing_info.config = MagicMock(max_age=float(timedelta(seconds=3600).total_seconds()))
+
+        # homeric-agents / homeric-tasks have no extra config (max_age == 0/None).
+        # Return matching info for those too so update_stream is never called.
+        zero_info = MagicMock()
+        zero_info.config = MagicMock(max_age=0)
+
+        async def _stream_info(name: str) -> MagicMock:
+            return existing_info if name == "homeric-deadletter" else zero_info
+
+        mock_jsm.stream_info = AsyncMock(side_effect=_stream_info)
+        mock_jsm.add_stream = AsyncMock()
+        mock_jsm.update_stream = AsyncMock()
+        mock_nc.jsm = MagicMock(return_value=mock_jsm)
+        pub._nc = mock_nc
+
+        await pub._ensure_streams()
+
+        assert mock_jsm.update_stream.call_args_list == []
+        assert mock_jsm.add_stream.call_args_list == []
 
 
 # ---------------------------------------------------------------------------
