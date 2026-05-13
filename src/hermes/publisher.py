@@ -108,8 +108,11 @@ class Publisher:
             logger.warning("NATS disconnected")
 
         async def _on_reconnected() -> None:
+            # Note: with allow_reconnect=False this callback is never fired by
+            # nats-py in practice. The _reconnect_loop success path is the sole
+            # incrementer of reconnect_count to avoid double-counting if this
+            # assumption ever changes. See issue #526.
             self._connected = True
-            self.reconnect_count += 1
             logger.info("NATS reconnected (count=%d)", self.reconnect_count)
 
         self._nc = await nats.connect(

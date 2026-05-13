@@ -79,7 +79,14 @@ class TestPublisherConnectionCallbacks:
         assert pub.is_connected is True
 
     @pytest.mark.asyncio
-    async def test_reconnected_cb_increments_reconnect_count(self) -> None:
+    async def test_reconnected_cb_does_not_increment_reconnect_count(self) -> None:
+        """Regression for issue #526.
+
+        The nats-py ``reconnected_cb`` must NOT increment ``reconnect_count``.
+        The ``_reconnect_loop`` success path is the sole incrementer; otherwise
+        a successful reconnect would be counted twice if nats-py ever fires the
+        callback (e.g. if ``allow_reconnect`` is changed in the future).
+        """
         pub = Publisher()
         mock_nc = MagicMock()
         mock_nc.jetstream.return_value = MagicMock()
@@ -98,9 +105,11 @@ class TestPublisherConnectionCallbacks:
 
         assert pub.reconnect_count == 0
         await captured_callbacks["reconnected_cb"]()  # type: ignore[operator]
-        assert pub.reconnect_count == 1
+        assert pub.reconnect_count == 0
         await captured_callbacks["reconnected_cb"]()  # type: ignore[operator]
-        assert pub.reconnect_count == 2
+        assert pub.reconnect_count == 0
+        # The callback still restores the connected flag.
+        assert pub.is_connected is True
 
     @pytest.mark.asyncio
     async def test_disconnected_cb_sets_last_error(self) -> None:
