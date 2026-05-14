@@ -52,3 +52,15 @@ repos:
         entry: '^\s*continue-on-error:\s*true\s*$'
         files: ^\.github/workflows/.*\.ya?ml$
         pass_filenames: true
+
+      - id: no-latest-image-tags
+        name: "forbid :latest image tags in ops manifests"
+        description: >
+          Regression guard for #316/#566. Floating `:latest` tags (and
+          `uses: ...@latest` action refs) break reproducibility. Pin to an
+          explicit version (and digest where supported).
+        language: system
+        entry: bash scripts/check-no-latest-tags.sh
+        pass_filenames: false
+        # Run once per commit; the script scans the tracked file set itself.
+        always_run: true
