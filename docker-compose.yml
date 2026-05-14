@@ -12,6 +12,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     deploy:
       resources:
         limits:
