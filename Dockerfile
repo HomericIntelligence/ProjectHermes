@@ -19,6 +19,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends tini=0.19.0-1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install curl for the HEALTHCHECK directive below. Intentionally NOT version-pinned
+# to avoid bumping in lockstep with the base image; the HEALTHCHECK only uses curl's
+# stable -f flag. See issue #561.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /build/deps /usr/local/lib/python3.12/site-packages/
 COPY src/hermes/ ./hermes/
 
