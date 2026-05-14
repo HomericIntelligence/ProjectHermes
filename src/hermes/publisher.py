@@ -9,6 +9,7 @@ import logging
 import random
 import time
 from collections import OrderedDict, deque
+from datetime import datetime, timezone
 from typing import Any
 
 import nats
@@ -75,8 +76,16 @@ class Publisher:
         self._connected: bool = False
         self.reconnect_count: int = 0
         self.last_error: str = ""
+        self.last_reconnect_attempt_at: datetime | None = None
+        self.consecutive_reconnect_failures: int = 0
         self._stop_event: asyncio.Event = asyncio.Event()
         self._reconnect_task: asyncio.Task[None] | None = None
+
+    @property
+    def reconnect_loop_running(self) -> bool:
+        """Return True when the background reconnect loop is active."""
+        task = self._reconnect_task
+        return task is not None and not task.done()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -139,6 +148,10 @@ class Publisher:
             # incrementer of reconnect_count to avoid double-counting if this
             # assumption ever changes. See issue #526.
             self._connected = True
+            # Note: per the docstring above, with allow_reconnect=False this
+            # callback is never fired by nats-py. The _reconnect_loop success
+            # path is the sole incrementer of reconnect_count to avoid
+            # double-counting. We intentionally do NOT bump counters here.
             logger.info("NATS reconnected (count=%d)", self.reconnect_count)
 
         self._nc = await nats.connect(
@@ -198,12 +211,14 @@ class Publisher:
                 failed_attempts,
                 delay,
             )
+            self.last_reconnect_attempt_at = datetime.now(timezone.utc)
             try:
                 await asyncio.wait_for(
                     self._connect_internal(url, connect_timeout), timeout=hard_timeout
                 )
                 self.reconnect_count += 1
                 failed_attempts = 0
+                self.consecutive_reconnect_failures = 0
                 NATS_RECONNECTS.labels(result="success").inc()
                 logger.info("NATS reconnected via external loop (count=%d)", self.reconnect_count)
             except Exception as exc:
@@ -214,6 +229,7 @@ class Publisher:
                 # plenty of headroom while staying bounded.
                 if failed_attempts < 32:
                     failed_attempts += 1
+                self.consecutive_reconnect_failures += 1
                 NATS_RECONNECTS.labels(result="failed").inc()
                 logger.error("NATS reconnect failed (failed_attempts=%d): %s", failed_attempts, exc)
 

@@ -25,6 +25,9 @@ def _make_mock_publisher(*, connected: bool = True) -> MagicMock:
     mock.disconnect = AsyncMock()
     mock.reconnect_count = 0
     mock.last_error = ""
+    mock.last_reconnect_attempt_at = None
+    mock.consecutive_reconnect_failures = 0
+    mock.reconnect_loop_running = False
     return mock
 
 

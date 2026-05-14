@@ -23,6 +23,9 @@ def _build_client(
     connected: bool = True,
     reconnect_count: int = 0,
     last_error: str = "",
+    last_reconnect_attempt_at: object = None,
+    consecutive_reconnect_failures: int = 0,
+    reconnect_loop_running: bool = False,
 ) -> TestClient:
     """Build a TestClient with a mocked Publisher and a known webhook secret."""
     from hermes.config import Settings, get_settings
@@ -38,6 +41,9 @@ def _build_client(
     mock_publisher.publish = AsyncMock()
     mock_publisher.reconnect_count = reconnect_count
     mock_publisher.last_error = last_error
+    mock_publisher.last_reconnect_attempt_at = last_reconnect_attempt_at
+    mock_publisher.consecutive_reconnect_failures = consecutive_reconnect_failures
+    mock_publisher.reconnect_loop_running = reconnect_loop_running
 
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
@@ -122,6 +128,9 @@ class TestHealthEndpoint:
         mock_publisher.dead_letter_count = 7
         mock_publisher.reconnect_count = 0
         mock_publisher.last_error = ""
+        mock_publisher.last_reconnect_attempt_at = None
+        mock_publisher.consecutive_reconnect_failures = 0
+        mock_publisher.reconnect_loop_running = False
         mock_publisher.publish = AsyncMock()
         app.state.publisher = mock_publisher
 
@@ -176,6 +185,12 @@ class TestHealthEndpoint:
         mock_publisher.dead_letter_count = 42
         mock_publisher.reconnect_count = 0
         mock_publisher.last_error = ""
+        # PR #627: HealthResponse now surfaces reconnect-loop state (issue #528).
+        # ``MagicMock(spec=Publisher)`` does not see instance attributes set in
+        # ``__init__``, so we must set them explicitly here.
+        mock_publisher.last_reconnect_attempt_at = None
+        mock_publisher.consecutive_reconnect_failures = 0
+        mock_publisher.reconnect_loop_running = False
         mock_publisher.publish = AsyncMock()
         app.state.publisher = mock_publisher
 
@@ -196,6 +211,32 @@ class TestHealthEndpoint:
         body = client.get("/health").json()
         assert body["dead_letter_queue_depth"] == 0
         assert body["dead_letter_queue_alert_threshold_pct"] == 0.0
+
+    def test_health_includes_reconnect_loop_fields_defaults(self) -> None:
+        """Issue #528: /health surfaces reconnect-loop state with safe defaults."""
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "last_reconnect_attempt_at" in body
+        assert body["last_reconnect_attempt_at"] is None
+        assert "consecutive_reconnect_failures" in body
+        assert body["consecutive_reconnect_failures"] == 0
+        assert "reconnect_loop_running" in body
+        assert body["reconnect_loop_running"] is False
+
+    def test_health_surfaces_reconnect_loop_state(self) -> None:
+        """Issue #528: /health reflects publisher reconnect-loop state."""
+        from datetime import datetime, timezone
+
+        ts = datetime(2026, 5, 12, 10, 30, 0, tzinfo=timezone.utc)
+        client = _build_client(
+            last_reconnect_attempt_at=ts,
+            consecutive_reconnect_failures=4,
+            reconnect_loop_running=True,
+        )
+        body = client.get("/health").json()
+        assert body["last_reconnect_attempt_at"].startswith("2026-05-12T10:30:00")
+        assert body["consecutive_reconnect_failures"] == 4
+        assert body["reconnect_loop_running"] is True
 
 
 class TestReadyEndpoint:

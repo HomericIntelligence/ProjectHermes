@@ -326,6 +326,89 @@ class TestReconnectLoopInterruptibleSleep:
         await pub.disconnect()
 
 
+class TestReconnectLoopHealthState:
+    """Issue #528: Publisher exposes reconnect-loop state for /health."""
+
+    @pytest.mark.asyncio
+    async def test_initial_health_state_defaults(self) -> None:
+        pub = Publisher()
+        assert pub.last_reconnect_attempt_at is None
+        assert pub.consecutive_reconnect_failures == 0
+        assert pub.reconnect_loop_running is False
+
+    @pytest.mark.asyncio
+    async def test_reconnect_loop_running_true_after_connect(self) -> None:
+        pub = Publisher()
+        mock_nc = _make_mock_nc()
+        await _do_connect(pub, mock_nc)
+        try:
+            assert pub.reconnect_loop_running is True
+        finally:
+            await pub.disconnect()
+        assert pub.reconnect_loop_running is False
+
+    @pytest.mark.asyncio
+    async def test_failed_reconnect_increments_failure_counter(self) -> None:
+        from datetime import datetime
+
+        pub = Publisher()
+        call_count = 0
+
+        async def fake_connect(url: str, **kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_mock_nc(closed=False)
+            raise OSError("refused")
+
+        with patch("nats.connect", side_effect=fake_connect):
+            await pub.connect("nats://localhost:4222")
+            assert pub.consecutive_reconnect_failures == 0
+
+            pub._nc = _make_mock_nc(closed=True)
+            pub._stop_event = asyncio.Event()
+            loop_task = asyncio.ensure_future(
+                pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
+            )
+            await asyncio.sleep(0.20)
+            pub._stop_event.set()
+            await loop_task
+
+        assert pub.consecutive_reconnect_failures >= 1
+        assert isinstance(pub.last_reconnect_attempt_at, datetime)
+
+    @pytest.mark.asyncio
+    async def test_successful_reconnect_resets_failure_counter(self) -> None:
+        pub = Publisher()
+        call_count = 0
+        reconnected: asyncio.Event = asyncio.Event()
+
+        async def fake_connect(url: str, **kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_mock_nc(closed=False)
+            # Simulate a successful reconnect on retry
+            reconnected.set()
+            pub._stop_event.set()
+            return _make_mock_nc(closed=False)
+
+        with patch("nats.connect", side_effect=fake_connect):
+            await pub.connect("nats://localhost:4222")
+            pub.consecutive_reconnect_failures = 5  # pretend prior failures occurred
+            pub._nc = _make_mock_nc(closed=True)
+
+            pub._stop_event = asyncio.Event()
+            loop_task = asyncio.ensure_future(
+                pub._reconnect_loop("nats://localhost:4222", 5.0, 0.05, 5.0)
+            )
+            await asyncio.wait_for(reconnected.wait(), timeout=5.0)
+            pub._stop_event.set()
+            await loop_task
+
+        assert pub.consecutive_reconnect_failures == 0
+
+
 class TestConnectInternalExtracted:
     @pytest.mark.asyncio
     async def test_connect_internal_sets_connected_and_js(self) -> None:
