@@ -379,27 +379,27 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
-      - name: Check pyproject.toml version
-        run: |
-          python3 -c "
-          import tomllib
-          d = tomllib.load(open('pyproject.toml', 'rb'))
-          v = d['project']['version']
-          print(f'pyproject.toml version: {v}')
-          "
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.12"
 
-      - name: Check version consistency (pyproject.toml vs pixi.toml)
+      - name: Check package version (pyproject.toml vs pixi.toml)
         run: |
-          set -e
-          PYPROJECT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          PIXI_VERSION=$(grep '^version = ' pixi.toml | sed 's/version = "\(.*\)"/\1/')
+          set -euo pipefail
+          PYPROJECT_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          PIXI_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pixi.toml','rb'))['workspace']['version'])")
 
           if [ "$PYPROJECT_VERSION" != "$PIXI_VERSION" ]; then
             echo "Version mismatch: pyproject.toml ($PYPROJECT_VERSION) != pixi.toml ($PIXI_VERSION)"
             exit 1
           fi
+          echo "Package version check passed: $PYPROJECT_VERSION"
 
-          echo "Version check passed: $PYPROJECT_VERSION"
+      - name: Check dependency ranges (pyproject.toml vs pixi.toml)
+        # Asserts every entry in pixi.toml [pypi-dependencies] has a matching
+        # version range in pyproject.toml [project.dependencies]. See #594.
+        run: python3 scripts/check_dep_sync.py
 
       - name: Check pixi.lock is not modified (uncommitted)
         run: |
