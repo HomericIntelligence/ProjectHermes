@@ -33,8 +33,8 @@ def test_project_dependencies_section_exists(pyproject: dict) -> None:
 
 def test_project_dependencies_count(pyproject: dict) -> None:
     deps = pyproject["project"]["dependencies"]
-    assert len(deps) == 10, (
-        f"Expected 10 runtime dependencies, found {len(deps)}: {deps}"
+    assert len(deps) == 11, (
+        f"Expected 11 runtime dependencies, found {len(deps)}: {deps}"
     )
 
 

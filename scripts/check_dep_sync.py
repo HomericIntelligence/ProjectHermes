@@ -31,10 +31,10 @@ if sys.version_info >= (3, 11):
     import tomllib
 else:
     try:
-        import tomllib  # type: ignore[no-redef]
+        import tomllib
     except ImportError:
         try:
-            import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib  # type: ignore[import-not-found,no-redef]
         except ImportError:
             print("ERROR: tomli is required on Python < 3.11 (pip install tomli)", file=sys.stderr)
             sys.exit(1)
@@ -102,7 +102,8 @@ def parse_pixi(table: dict[str, Any]) -> dict[str, str]:
 
 def _load(path: Path) -> dict[str, Any]:
     with path.open("rb") as fh:
-        return tomllib.load(fh)
+        data: dict[str, Any] = tomllib.load(fh)
+    return data
 
 
 def check_upper_bounds(deps: list[str]) -> list[str]:
