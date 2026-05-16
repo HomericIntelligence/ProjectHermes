@@ -10,11 +10,7 @@ from fastapi.testclient import TestClient
 
 from tests.helpers import TEST_SECRET, sign_body
 
-_TEST_SECRET = TEST_SECRET
 
-
-def _sign(body: bytes) -> str:
-    return sign_body(body, _TEST_SECRET)
 
 
 def _build_client(dead_letters: list | None = None) -> TestClient:
@@ -78,7 +74,7 @@ class TestWebhookMetricsInstrumentation:
     def test_valid_webhook_increments_received_counter(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "agent.created",
@@ -95,7 +91,7 @@ class TestWebhookMetricsInstrumentation:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         after = _get_counter_value(
@@ -106,7 +102,7 @@ class TestWebhookMetricsInstrumentation:
     def test_invalid_payload_increments_failed_counter(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         body_bytes = json.dumps({"bad": "payload"}).encode()
 
@@ -116,7 +112,7 @@ class TestWebhookMetricsInstrumentation:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         after = _get_counter_value("hermes_webhooks_failed_total", {"reason": "invalid_payload"})
@@ -125,7 +121,7 @@ class TestWebhookMetricsInstrumentation:
     def test_nats_unavailable_increments_failed_counter(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         from hermes.server import app
         from hermes.publisher import Publisher
 
@@ -150,7 +146,7 @@ class TestWebhookMetricsInstrumentation:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         after = _get_counter_value("hermes_webhooks_failed_total", {"reason": "nats_not_connected"})

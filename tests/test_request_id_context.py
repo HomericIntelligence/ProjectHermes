@@ -13,11 +13,7 @@ from fastapi.testclient import TestClient
 
 from tests.helpers import TEST_SECRET, sign_body
 
-_TEST_SECRET = TEST_SECRET
 
-
-def _sign(body: bytes) -> str:
-    return sign_body(body, _TEST_SECRET)
 
 
 def _build_client(*, connected: bool = True) -> TestClient:
@@ -32,7 +28,7 @@ def _build_client(*, connected: bool = True) -> TestClient:
     mock_publisher.publish = AsyncMock()
 
     app.state.publisher = mock_publisher
-    app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=_TEST_SECRET)
+    app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=TEST_SECRET)
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -58,7 +54,7 @@ class TestRequestIdInLogContext:
                 content=body_bytes,
                 headers={
                     "Content-Type": "application/json",
-                    "X-Webhook-Signature": _sign(body_bytes),
+                    "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                     "X-Request-ID": fixed_id,
                 },
             )
@@ -88,7 +84,7 @@ class TestRequestIdInLogContext:
                 content=body_bytes,
                 headers={
                     "Content-Type": "application/json",
-                    "X-Webhook-Signature": _sign(body_bytes),
+                    "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                     "X-Request-ID": fixed_id,
                 },
             )
@@ -114,7 +110,7 @@ class TestRequestIdInLogContext:
         mock_publisher.active_subjects = []
         mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
         app.state.publisher = mock_publisher
-        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=_TEST_SECRET)
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=TEST_SECRET)
 
         client = TestClient(app, raise_server_exceptions=False)
         payload = {
@@ -131,7 +127,7 @@ class TestRequestIdInLogContext:
                 content=body_bytes,
                 headers={
                     "Content-Type": "application/json",
-                    "X-Webhook-Signature": _sign(body_bytes),
+                    "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                     "X-Request-ID": fixed_id,
                 },
             )
@@ -159,7 +155,7 @@ class TestRequestIdInErrorResponses:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 "X-Request-ID": fixed_id,
             },
         )
@@ -209,7 +205,7 @@ class TestRequestIdInErrorResponses:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 "X-Request-ID": fixed_id,
             },
         )
@@ -231,7 +227,7 @@ class TestRequestIdInErrorResponses:
         mock_publisher.active_subjects = []
         mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
         app.state.publisher = mock_publisher
-        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=_TEST_SECRET)
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=TEST_SECRET)
 
         client = TestClient(app, raise_server_exceptions=False)
         payload = {
@@ -247,7 +243,7 @@ class TestRequestIdInErrorResponses:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 "X-Request-ID": fixed_id,
             },
         )
@@ -266,7 +262,7 @@ class TestRequestIdInErrorResponses:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 422
@@ -284,7 +280,7 @@ class TestRequestIdInErrorResponses:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 422

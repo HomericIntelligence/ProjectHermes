@@ -13,16 +13,12 @@ from fastapi.testclient import TestClient
 
 from tests.helpers import TEST_SECRET, sign_body
 
-_TEST_SECRET = TEST_SECRET
 _VALID_PAYLOAD = {
     "event": "agent.created",
     "data": {"host": "localhost", "name": "bot"},
     "timestamp": "2026-03-15T00:00:00Z",
 }
 
-
-def _sign(body: bytes) -> str:
-    return sign_body(body, _TEST_SECRET)
 
 
 @contextmanager
@@ -44,7 +40,7 @@ def _rate_limit_client(
     limiter._storage.reset()  # type: ignore[attr-defined]
 
     env_overrides = {
-        "WEBHOOK_SECRET": _TEST_SECRET,
+        "WEBHOOK_SECRET": TEST_SECRET,
         "WEBHOOK_RATE_LIMIT": rate_limit,
     }
     old_env = {k: os.environ.get(k) for k in env_overrides}
@@ -68,7 +64,7 @@ def _post_webhook(client: TestClient, payload: dict | None = None) -> object:
         content=body,
         headers={
             "Content-Type": "application/json",
-            "X-Webhook-Signature": _sign(body),
+            "X-Webhook-Signature": sign_body(body, TEST_SECRET),
         },
     )
 
@@ -128,7 +124,7 @@ class TestNatsPublishTimeout:
         limiter._storage.reset()  # type: ignore[attr-defined]
 
         env_overrides = {
-            "WEBHOOK_SECRET": _TEST_SECRET,
+            "WEBHOOK_SECRET": TEST_SECRET,
             "WEBHOOK_RATE_LIMIT": "100/minute",
         }
         old_env = {k: os.environ.get(k) for k in env_overrides}

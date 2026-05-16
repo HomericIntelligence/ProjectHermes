@@ -11,11 +11,7 @@ from fastapi.testclient import TestClient
 
 from tests.helpers import TEST_SECRET, sign_body
 
-_TEST_SECRET = TEST_SECRET
 
-
-def _sign(body: bytes) -> str:
-    return sign_body(body, _TEST_SECRET)
 
 
 def _build_client(
@@ -48,7 +44,7 @@ def _build_client(
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
     # Override settings via FastAPI dependency injection
-    test_settings = Settings(webhook_secret=_TEST_SECRET)
+    test_settings = Settings(webhook_secret=TEST_SECRET)
     app.dependency_overrides[get_settings] = lambda: test_settings
     # Reset rate limiter so each test starts with a clean slate
     limiter._storage.reset()  # type: ignore[attr-defined]
@@ -268,7 +264,7 @@ class TestReadyEndpoint:
 
 class TestWebhookEndpoint:
     def test_valid_payload_returns_202(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "agent.created",
@@ -281,7 +277,7 @@ class TestWebhookEndpoint:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 202
@@ -293,7 +289,7 @@ class TestWebhookEndpoint:
         assert len(body["request_id"]) > 0
 
     def test_webhook_invalid_payload_returns_422(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         body_bytes = json.dumps({"bad": "payload"}).encode()
         response = client.post(
@@ -301,13 +297,13 @@ class TestWebhookEndpoint:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 422
 
     def test_webhook_missing_body_returns_422(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         body_bytes = b"not json"
         response = client.post(
@@ -315,13 +311,13 @@ class TestWebhookEndpoint:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 422
 
     def test_webhook_returns_event_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "task.updated",
@@ -334,14 +330,14 @@ class TestWebhookEndpoint:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         body = response.json()
         assert body["event"] == "task.updated"
 
     def test_webhook_bad_signature_returns_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "agent.created",
@@ -364,7 +360,7 @@ class TestWebhookEndpoint:
     ) -> None:
         from prometheus_client import REGISTRY
 
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         labels = {"reason": "invalid_signature"}
         before = REGISTRY.get_sample_value("hermes_webhooks_failed_total", labels) or 0.0
@@ -398,7 +394,7 @@ class TestWebhookEndpoint:
 
         from hermes.config import Settings, get_settings
 
-        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=_TEST_SECRET)
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=TEST_SECRET)
 
         client = TestClient(app, raise_server_exceptions=False)
         payload = {
@@ -412,7 +408,7 @@ class TestWebhookEndpoint:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 503
@@ -425,7 +421,7 @@ class TestSignatureValidation:
     def test_missing_signature_header_returns_401_when_secret_configured(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "agent.created",
@@ -438,7 +434,7 @@ class TestSignatureValidation:
     def test_empty_signature_header_returns_401_when_secret_configured(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "agent.created",
@@ -473,7 +469,7 @@ class TestRequestIDMiddleware:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 "X-Request-ID": valid_id,
             },
         )
@@ -496,7 +492,7 @@ class TestRequestIDMiddleware:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 "X-Request-ID": invalid_id,
             },
         )
@@ -519,7 +515,7 @@ class TestRequestIDMiddleware:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         returned_id = response.headers.get("X-Request-ID")
@@ -542,7 +538,7 @@ class TestRequestIDMiddleware:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 "X-Request-ID": oversized_id,
             },
         )
@@ -569,7 +565,7 @@ class TestPayloadSizeLimit:
             headers={
                 "Content-Type": "application/octet-stream",
                 "Content-Length": str(2_000_000),
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 413
@@ -582,7 +578,7 @@ class TestPayloadSizeLimit:
             content=body_bytes,
             headers={
                 "Content-Type": "application/octet-stream",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 413
@@ -596,7 +592,7 @@ class TestPayloadSizeLimit:
             content=body_bytes,
             headers={
                 "Content-Type": "application/octet-stream",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code != 413
@@ -630,7 +626,7 @@ class TestPayloadSizeLimit:
                 headers={
                     "Content-Type": "application/octet-stream",
                     "Content-Length": str(2_000_000),
-                    "X-Webhook-Signature": _sign(b"x" * 100),
+                    "X-Webhook-Signature": sign_body(b"x" * 100, TEST_SECRET),
                 },
             )
         assert any("2000000" in r.message and "1048576" in r.message for r in caplog.records)
@@ -646,7 +642,7 @@ class TestPayloadSizeLimit:
                 content=body_bytes,
                 headers={
                     "Content-Type": "application/octet-stream",
-                    "X-Webhook-Signature": _sign(body_bytes),
+                    "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 },
             )
         assert any("1048577" in r.message and "1048576" in r.message for r in caplog.records)
@@ -658,7 +654,7 @@ class TestWildcardInjectionSanitization:
     def test_wildcard_in_host_field_is_sanitized_before_publish(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
 
         published_subjects: list[str] = []
 
@@ -691,7 +687,7 @@ class TestWildcardInjectionSanitization:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
 
@@ -704,7 +700,7 @@ class TestWildcardInjectionSanitization:
     def test_wildcard_in_name_field_is_sanitized_before_publish(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
 
         published_subjects: list[str] = []
 
@@ -737,7 +733,7 @@ class TestWildcardInjectionSanitization:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
 
@@ -1064,7 +1060,7 @@ class TestWWWAuthenticate:
     def test_bad_signature_401_has_www_authenticate_header(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         payload = {
             "event": "agent.created",
@@ -1166,7 +1162,7 @@ class TestTimestampValidation:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 422
@@ -1184,7 +1180,7 @@ class TestTimestampValidation:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code in (202, 500)
@@ -1290,7 +1286,7 @@ class TestPublisherRaises:
         from hermes.publisher import Publisher
         from hermes.server import app
 
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
 
         mock_publisher = MagicMock(spec=Publisher)
         mock_publisher.is_connected = True
@@ -1311,7 +1307,7 @@ class TestPublisherRaises:
             content=body_bytes,
             headers={
                 "Content-Type": "application/json",
-                "X-Webhook-Signature": _sign(body_bytes),
+                "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
             },
         )
         assert response.status_code == 500
@@ -1326,7 +1322,7 @@ class TestExceptionDetailNotLeaked:
         """422 response body must only contain 'detail', no stack trace or internal info."""
         import logging
 
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         body_bytes = json.dumps({"bad": "payload"}).encode()
 
@@ -1336,7 +1332,7 @@ class TestExceptionDetailNotLeaked:
                 content=body_bytes,
                 headers={
                     "Content-Type": "application/json",
-                    "X-Webhook-Signature": _sign(body_bytes),
+                    "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 },
             )
 
@@ -1352,7 +1348,7 @@ class TestExceptionDetailNotLeaked:
         """A WARNING-level log must be emitted when the webhook payload is invalid."""
         import logging
 
-        monkeypatch.setenv("WEBHOOK_SECRET", _TEST_SECRET)
+        monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
         client = _build_client()
         body_bytes = json.dumps({"bad": "payload"}).encode()
 
@@ -1362,7 +1358,7 @@ class TestExceptionDetailNotLeaked:
                 content=body_bytes,
                 headers={
                     "Content-Type": "application/json",
-                    "X-Webhook-Signature": _sign(body_bytes),
+                    "X-Webhook-Signature": sign_body(body_bytes, TEST_SECRET),
                 },
             )
 
