@@ -28,7 +28,7 @@ dependencies = [
     # See readonly-fs-smoke failure on main, GH run 25840464800. Drop the pin once
     # starlette ships a fix and fastapi's resolver picks it up.
     "starlette>=0.46.0,<1.0",
-    "uvicorn[standard]>=0.46.0,<1",
+    "uvicorn[standard]>=0.47.0,<1",
     "nats-py>=2.9,<3",
     "pydantic>=2.0,<3",
     "pydantic-settings>=2.14.1,<3",
