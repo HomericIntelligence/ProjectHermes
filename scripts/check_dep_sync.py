@@ -34,7 +34,7 @@ else:
         import tomllib
     except ImportError:
         try:
-            import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+            import tomli as tomllib  # type: ignore[import-not-found,no-redef,unused-ignore]
         except ImportError:
             print("ERROR: tomli is required on Python < 3.11 (pip install tomli)", file=sys.stderr)
             sys.exit(1)
