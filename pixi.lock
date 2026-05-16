@@ -543,7 +543,7 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: 4c8dbc29b4ac99b73389d3094f71eb9d919218633c8a02c462e5c9987a26166e
+  sha256: fc5717775e631012bbf2da270472c2e4ed19226511598c75f374e9855b26f442
   requires_dist:
   - fastapi>=0.115,<1
   - starlette>=0.46.0,<1.0
@@ -555,6 +555,14 @@ packages:
   - slowapi>=0.1.9,<1
   - limits>=5.8.0,<6
   - prometheus-client>=0.25.0,<1
+  - pytest>=9.0,<10 ; extra == 'dev'
+  - pytest-asyncio>=1.0,<2 ; extra == 'dev'
+  - pytest-cov>=5.0,<7 ; extra == 'dev'
+  - ruff>=0.11,<1 ; extra == 'dev'
+  - mypy>=1.10,<2 ; extra == 'dev'
+  - pip-audit>=2.7,<3 ; extra == 'dev'
+  - pip>=26.1,<27 ; extra == 'dev'
+  - pre-commit>=3.0,<5 ; extra == 'dev'
   requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl
   name: httpcore
