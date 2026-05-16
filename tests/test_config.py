@@ -293,3 +293,23 @@ class TestWebhookSecretProductionWarning:
             )
         warning_messages = [call.args[0] for call in mock_warn.call_args_list if call.args]
         assert any("WEBHOOK_SECRET is NOT SET" in msg for msg in warning_messages)
+
+
+class TestAgamemnonFieldsRemoved:
+    """Regression guard: AGAMEMNON_URL/API_KEY are gone from Settings (#449)."""
+
+    def test_settings_has_no_agamemnon_url(self) -> None:
+        from hermes.config import Settings
+
+        assert not hasattr(Settings(), "agamemnon_url"), (
+            "Settings.agamemnon_url was removed; re-introducing it would break "
+            "the decoupled-from-Agamemnon contract (see #449)."
+        )
+
+    def test_settings_has_no_agamemnon_api_key(self) -> None:
+        from hermes.config import Settings
+
+        assert not hasattr(Settings(), "agamemnon_api_key"), (
+            "Settings.agamemnon_api_key was removed; re-introducing it would "
+            "break the decoupled-from-Agamemnon contract (see #449)."
+        )
