@@ -45,7 +45,7 @@ def main() -> None:
     spec = app.openapi()
 
     if args.format == "yaml":
-        import yaml  # PyYAML — transitive dependency via pydantic-settings/dev tooling.
+        import yaml  # type: ignore[import-untyped]  # PyYAML — transitive dep; no stubs.
 
         with open(output, "w", encoding="utf-8") as f:
             yaml.safe_dump(spec, f, sort_keys=False)
