@@ -11,7 +11,7 @@ just = ">=1.13"
 
 [pypi-dependencies]
 hermes = { path = ".", editable = true }
-fastapi = ">=0.115,<1"
+fastapi = ">=0.136.1,<1"
 # Pin starlette<1.0 — starlette 1.0.0 has a BaseHTTPMiddleware regression that
 # raises `RuntimeError: Response content longer than Content-Length` when the
 # streaming-response wrapper re-emits a body that already has Content-Length set

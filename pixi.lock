@@ -543,9 +543,9 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: bec99cca64c8df9bc063dad83178d27ab374ea6d37a06733e3e19b9946fa97f1
+  sha256: 37df0738e51fba359ebb08026b5e3a4510165a512bc055fb573efae1d0cada95
   requires_dist:
-  - fastapi>=0.115,<1
+  - fastapi>=0.136.1,<1
   - starlette>=0.46.0,<1.0
   - uvicorn[standard]>=0.46.0,<1
   - nats-py>=2.9,<3
