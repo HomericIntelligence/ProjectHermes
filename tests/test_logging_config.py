@@ -111,6 +111,28 @@ class TestJsonFormatter:
         parsed = json.loads(formatter.format(record))
         assert parsed["message"] == "hello world"
 
+    def test_exc_info_branch_formats_traceback(self) -> None:
+        """Cover JsonFormatter.format() exc_info branch (#463)."""
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            import sys
+
+            record = logging.LogRecord(
+                name="test",
+                level=logging.ERROR,
+                pathname="",
+                lineno=0,
+                msg="caught",
+                args=(),
+                exc_info=sys.exc_info(),
+            )
+        formatter = JsonFormatter()
+        parsed = json.loads(formatter.format(record))
+        assert "exc_info" in parsed
+        assert "ValueError" in parsed["exc_info"]
+        assert "boom" in parsed["exc_info"]
+
 
 class TestSetupLogging:
     def _clear_root_handlers(self) -> None:

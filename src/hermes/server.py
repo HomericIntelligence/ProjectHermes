@@ -178,7 +178,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
         else:
-            logger.warning("Shutdown: timed out waiting for in-flight requests; proceeding")
+            # Report the number of abandoned requests so operators can correlate
+            # drain timeouts with upstream impact. See #441.
+            async with _inflight_lock:
+                abandoned = _inflight
+            logger.warning(
+                "Shutdown: timed out with %d request(s) still in flight; proceeding",
+                abandoned,
+            )
 
         logger.info("Shutdown: draining NATS connection")
         await publisher.disconnect()

@@ -224,3 +224,39 @@ class TestPayloadSizeLimitMiddleware:
         client = self._mini_client(max_bytes=10)
         response = client.post("/", content=b"x" * 5)
         assert response.status_code == 200
+
+    def test_malformed_content_length_falls_through_to_body_check(self) -> None:
+        """A non-integer Content-Length must hit the ValueError branch and then
+        fall through to the body-length check (middleware.py lines 38-39 + 41-48).
+
+        See #478.
+        """
+        client = self._mini_client(max_bytes=10)
+        # Forcing a non-integer Content-Length triggers the int() ValueError;
+        # the middleware then falls through and rejects on body size > 10.
+        response = client.post(
+            "/", content=b"y" * 50, headers={"Content-Length": "not-a-number"}
+        )
+        assert response.status_code == 413
+
+    def test_body_too_large_without_content_length_returns_413(self) -> None:
+        """Body-size branch fires when Content-Length is absent (lines 43-48).
+
+        See #478.
+        """
+        from fastapi import FastAPI
+        from starlette.testclient import TestClient as StarletteClient
+        from hermes.middleware import PayloadSizeLimitMiddleware
+
+        mini = FastAPI()
+        mini.add_middleware(PayloadSizeLimitMiddleware, max_bytes=10)
+
+        @mini.post("/")
+        async def _ok() -> dict:  # type: ignore[return]
+            return {"ok": True}
+
+        client = StarletteClient(mini, raise_server_exceptions=False)
+        # Send body > limit; the Content-Length branch may also fire but
+        # the body-size branch is a defense-in-depth path that must be exercised.
+        response = client.post("/", content=b"z" * 25)
+        assert response.status_code == 413

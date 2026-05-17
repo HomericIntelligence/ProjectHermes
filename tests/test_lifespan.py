@@ -236,3 +236,30 @@ async def test_last_retry_logs_giving_up_not_retrying(mock_publisher: MagicMock)
     last_format_string: str = last_error_call.args[0]
     assert "retrying" not in last_format_string.lower()
     assert "giving up" in last_format_string.lower()
+
+
+@pytest.mark.anyio
+async def test_lifespan_warns_when_webhook_secret_unset(
+    mock_publisher: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When WEBHOOK_SECRET is unset, lifespan must log the HMAC-disabled warning (#516)."""
+    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+    monkeypatch.setenv("WEBHOOK_SECRET", "")
+    from hermes.config import get_settings
+    from hermes.server import lifespan, app
+
+    get_settings.cache_clear()  # type: ignore[attr-defined]
+
+    with (
+        patch("hermes.server.Publisher", return_value=mock_publisher),
+        patch("hermes.server.logger") as mock_logger,
+    ):
+        async with lifespan(app):
+            pass
+
+    warning_messages = [c.args[0] for c in mock_logger.warning.call_args_list if c.args]
+    assert any(
+        "HMAC webhook validation is DISABLED" in msg for msg in warning_messages
+    ), f"expected HMAC-disabled warning, got: {warning_messages!r}"
+
+    get_settings.cache_clear()  # type: ignore[attr-defined]

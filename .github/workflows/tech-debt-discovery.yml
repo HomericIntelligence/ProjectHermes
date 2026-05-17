@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MIT
+# Weekly scheduled run of scripts/discover-tech-debt.sh — posts the summary as
+# a comment on Epic #544 so newly introduced FIXME/TODO markers surface without
+# relying on maintainers remembering to run the script manually.
+# See HomericIntelligence/ProjectHermes#549.
+
+name: tech-debt-discovery
+
+on:
+  schedule:
+    # Mondays 14:00 UTC
+    - cron: "0 14 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Run tech-debt discovery
+        id: scan
+        run: |
+          set -euo pipefail
+          chmod +x scripts/discover-tech-debt.sh
+          {
+            echo 'OUTPUT<<HEREDOC_EOF'
+            scripts/discover-tech-debt.sh
+            echo 'HEREDOC_EOF'
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Post summary comment to Epic #544
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCAN_OUTPUT: ${{ steps.scan.outputs.OUTPUT }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Tech-debt discovery — $(date -u +%Y-%m-%d)"
+            echo ""
+            echo '```'
+            printf '%s\n' "$SCAN_OUTPUT"
+            echo '```'
+          } > /tmp/comment.md
+          gh issue comment 544 --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md

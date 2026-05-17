@@ -55,6 +55,16 @@ repos:
         files: ^\.github/workflows/.*\.ya?ml$
         pass_filenames: true
 
+      - id: docker-compose-config
+        name: "docker compose config (validate compose schema)"
+        description: >
+          Mirrors CI's `docker compose config --quiet` check so malformed
+          compose files fail at commit time, not on push (#538).
+        language: system
+        entry: bash -c 'docker compose config --quiet'
+        files: ^docker-compose\.ya?ml$
+        pass_filenames: false
+
       - id: no-latest-image-tags
         name: "forbid :latest image tags in ops manifests"
         description: >

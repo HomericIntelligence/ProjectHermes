@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MIT
+# Sync GitHub labels from .github/labels.yml whenever that file changes.
+# See HomericIntelligence/ProjectHermes#547.
+
+name: label-sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/labels.yml
+      - .github/workflows/label-sync.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Apply labels from .github/labels.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          count=$(yq 'length' .github/labels.yml)
+          for i in $(seq 0 $((count - 1))); do
+            name=$(yq -r ".[$i].name" .github/labels.yml)
+            color=$(yq -r ".[$i].color" .github/labels.yml)
+            desc=$(yq -r '.['"$i"'].description // ""' .github/labels.yml)
+            echo "Syncing label: $name ($color)"
+            gh label create "$name" --color "$color" --description "$desc" --force
+          done
