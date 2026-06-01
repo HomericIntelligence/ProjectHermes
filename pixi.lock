@@ -543,7 +543,7 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: f492cd7c01976b24342ed811dcb66bb41e3fa140b5e334d7640f83949b12cd04
+  sha256: 78d8b09551ad70de2f438679482ba9fc994783a22d4816c8d7c808526d01a5cf
   requires_dist:
   - fastapi>=0.136.1,<1
   - starlette>=0.46.0,<1.0
@@ -562,7 +562,7 @@ packages:
   - ruff>=0.11,<1 ; extra == 'dev'
   - mypy>=1.10,<2 ; extra == 'dev'
   - pip-audit>=2.7,<3 ; extra == 'dev'
-  - pip>=26.1,<27 ; extra == 'dev'
+  - pip>=26.1.1,<27 ; extra == 'dev'
   - pre-commit>=3.0,<5 ; extra == 'dev'
   requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl
