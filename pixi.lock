@@ -543,7 +543,7 @@ packages:
 - pypi: ./
   name: hermes
   version: 0.1.0
-  sha256: f492cd7c01976b24342ed811dcb66bb41e3fa140b5e334d7640f83949b12cd04
+  sha256: 8a43700cb2c25f59b4b2f6049aad6b5bf012272f288b214a4eeef3fcbd01f20f
   requires_dist:
   - fastapi>=0.136.1,<1
   - starlette>=0.46.0,<1.0
@@ -559,7 +559,7 @@ packages:
   - pytest>=9.0,<10 ; extra == 'dev'
   - pytest-asyncio>=1.0,<2 ; extra == 'dev'
   - pytest-cov>=5.0,<7 ; extra == 'dev'
-  - ruff>=0.11,<1 ; extra == 'dev'
+  - ruff>=0.15.14,<1 ; extra == 'dev'
   - mypy>=1.10,<2 ; extra == 'dev'
   - pip-audit>=2.7,<3 ; extra == 'dev'
   - pip>=26.1,<27 ; extra == 'dev'
