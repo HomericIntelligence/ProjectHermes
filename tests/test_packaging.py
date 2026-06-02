@@ -33,8 +33,8 @@ def test_project_dependencies_section_exists(pyproject: dict) -> None:
 
 def test_project_dependencies_count(pyproject: dict) -> None:
     deps = pyproject["project"]["dependencies"]
-    assert len(deps) == 11, (
-        f"Expected 11 runtime dependencies, found {len(deps)}: {deps}"
+    assert len(deps) == 12, (
+        f"Expected 12 runtime dependencies, found {len(deps)}: {deps}"
     )
 
 
@@ -51,6 +51,8 @@ def test_project_dependencies_count(pyproject: dict) -> None:
         "slowapi",
         "limits",
         "prometheus-client",
+        "urllib3",
+        "idna",
     ],
 )
 def test_dependency_has_upper_bound(dep: str, pyproject: dict) -> None:
