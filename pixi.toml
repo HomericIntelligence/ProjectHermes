@@ -12,13 +12,12 @@ just = ">=1.13"
 [pypi-dependencies]
 hermes = { path = ".", editable = true }
 fastapi = ">=0.136.1,<1"
-# Pin starlette<1.0 — starlette 1.0.0 has a BaseHTTPMiddleware regression that
-# raises `RuntimeError: Response content longer than Content-Length` when the
-# streaming-response wrapper re-emits a body that already has Content-Length set
-# by an inner handler (e.g. HTTPException → JSONResponse for /webhook 401). See
-# readonly-fs-smoke failure on main, GH run 25840464800. Keep in sync with
-# pyproject.toml; drop once starlette ships a fix.
-starlette = ">=0.46.0,<1.0"
+# Pin starlette>=1.0.1 — starlette 1.0.0 had a BaseHTTPMiddleware regression
+# that raised `RuntimeError: Response content longer than Content-Length` when
+# streaming-response wrapper re-emitted a body with Content-Length already set.
+# Fixed in 1.0.1. See readonly-fs-smoke failure on main, GH run 25840464800.
+# Keep in sync with pyproject.toml.
+starlette = ">=1.0.1,<2"
 uvicorn = {version = ">=0.47.0,<1", extras = ["standard"]}
 nats-py = ">=2.14.0,<3"
 pydantic = ">=2.13.4,<3"
