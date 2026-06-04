@@ -475,6 +475,28 @@
             "type": "number",
             "title": "Nats Retry Interval",
             "default": 5.0
+          },
+          "last_reconnect_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reconnect Attempt At"
+          },
+          "consecutive_reconnect_failures": {
+            "type": "integer",
+            "title": "Consecutive Reconnect Failures",
+            "default": 0
+          },
+          "nats_reconnect_loop_active": {
+            "type": "boolean",
+            "title": "Nats Reconnect Loop Active",
+            "default": false
           }
         },
         "type": "object",

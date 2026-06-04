@@ -86,7 +86,7 @@ def test_lifespan_degraded_health_returns_503(mock_publisher: MagicMock) -> None
     mock_publisher.last_error = ""
     mock_publisher.last_reconnect_attempt_at = None
     mock_publisher.consecutive_reconnect_failures = 0
-    mock_publisher.reconnect_loop_running = False
+    mock_publisher.reconnect_loop_active = False
 
     with (
         patch("hermes.server.Publisher", return_value=mock_publisher),

@@ -82,8 +82,8 @@ class Publisher:
         self._reconnect_task: asyncio.Task[None] | None = None
 
     @property
-    def reconnect_loop_running(self) -> bool:
-        """Return True when the background reconnect loop is active."""
+    def reconnect_loop_active(self) -> bool:
+        """Return True when the background reconnect loop task is alive (not None, not done)."""
         task = self._reconnect_task
         return task is not None and not task.done()
 
