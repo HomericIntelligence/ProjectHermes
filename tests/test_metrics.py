@@ -48,6 +48,7 @@ class TestMetricsEndpoint:
         assert "hermes_dead_letters_total" in text
         assert "hermes_publish_duration_seconds" in text
         assert "hermes_active_subjects_count" in text
+        assert "hermes_inflight_requests" in text
 
 
 class TestDeadLettersEndpoint:

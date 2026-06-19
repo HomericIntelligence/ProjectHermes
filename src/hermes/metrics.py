@@ -51,6 +51,11 @@ DEAD_LETTER_QUEUE_DEPTH: Gauge = Gauge(
     "Current number of items in the in-memory dead-letter queue",
 )
 
+INFLIGHT_REQUESTS: Gauge = Gauge(
+    "hermes_inflight_requests",
+    "Number of webhook requests currently being processed",
+)
+
 DEAD_LETTER_QUEUE_ALERTS: Counter = Counter(
     "hermes_dead_letter_queue_alerts_total",
     "Number of times the dead-letter queue depth crossed the alert threshold",

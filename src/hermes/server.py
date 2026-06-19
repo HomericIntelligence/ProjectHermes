@@ -24,7 +24,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from hermes import __version__
 from hermes.config import Settings, get_settings
 from hermes.logging_config import setup_logging
-from hermes.metrics import WEBHOOKS_FAILED, WEBHOOKS_RECEIVED
+from hermes.metrics import INFLIGHT_REQUESTS, WEBHOOKS_FAILED, WEBHOOKS_RECEIVED
 from hermes.middleware import PayloadSizeLimitMiddleware
 from hermes.models import (
     DeadLettersResponse,
@@ -72,11 +72,13 @@ async def _inflight_context() -> AsyncGenerator[None, None]:
     global _inflight
     async with _inflight_lock:
         _inflight += 1
+    INFLIGHT_REQUESTS.inc()
     try:
         yield
     finally:
         async with _inflight_lock:
             _inflight -= 1
+        INFLIGHT_REQUESTS.dec()
 
 
 async def _connect_with_retries(publisher: Publisher, settings: "Settings") -> Exception | None:
@@ -147,6 +149,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     _shutdown_event = asyncio.Event()
     _inflight = 0
+    INFLIGHT_REQUESTS.set(0)
 
     setup_logging(json_format=settings.log_json)
 
