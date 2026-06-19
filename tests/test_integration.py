@@ -26,10 +26,6 @@ _NATS_URL = os.environ.get("TEST_NATS_URL", "nats://localhost:4222")
 INTEGRATION_TEST_SECRET = "integration-test-secret-for-hermes-webhook"
 
 
-def _sign(body: bytes) -> str:
-    return sign_body(body, INTEGRATION_TEST_SECRET)
-
-
 # ---------------------------------------------------------------------------
 # Session-scoped skip if NATS is not available
 # ---------------------------------------------------------------------------
@@ -196,7 +192,7 @@ class TestWebhookIntegration:
                     content=body_bytes,
                     headers={
                         "Content-Type": "application/json",
-                        "X-Webhook-Signature": _sign(body_bytes),
+                        "X-Webhook-Signature": sign_body(body_bytes, INTEGRATION_TEST_SECRET),
                     },
                 )
             assert response.status_code == 202
@@ -232,7 +228,7 @@ class TestWebhookIntegration:
                 content=body_bytes,
                 headers={
                     "Content-Type": "application/json",
-                    "X-Webhook-Signature": _sign(body_bytes),
+                    "X-Webhook-Signature": sign_body(body_bytes, INTEGRATION_TEST_SECRET),
                 },
             )
         assert response.status_code == 503
@@ -657,9 +653,7 @@ class TestReconnectLifecycle:
         finally:
             await pub2.disconnect()
 
-    async def test_reconnect_count_not_incremented_by_nats_callback(
-        self, nats_url: str
-    ) -> None:
+    async def test_reconnect_count_not_incremented_by_nats_callback(self, nats_url: str) -> None:
         """Regression for issue #526.
 
         The nats-py ``reconnected_cb`` must not touch ``reconnect_count``; only
@@ -693,9 +687,7 @@ class TestReconnectBackoffIntegration:
     ``tests/test_publisher_reconnect_backoff.py`` that mock NATS entirely.
     """
 
-    async def test_loop_resets_backoff_when_connection_healthy(
-        self, nats_url: str
-    ) -> None:
+    async def test_loop_resets_backoff_when_connection_healthy(self, nats_url: str) -> None:
         """A healthy NATS connection makes the loop hit the
         ``failed_attempts = 0; continue`` reset branch on every iteration.
 
@@ -723,17 +715,13 @@ class TestReconnectBackoffIntegration:
             )
             await asyncio.sleep(0.1)
             assert not loop_task.done(), "loop terminated unexpectedly"
-            assert pub.reconnect_count == 0, (
-                "reset branch must not increment reconnect_count"
-            )
+            assert pub.reconnect_count == 0, "reset branch must not increment reconnect_count"
             pub._stop_event.set()
             await asyncio.wait_for(loop_task, timeout=2.0)
         finally:
             await pub.disconnect()
 
-    async def test_loop_recovers_after_transient_disconnect(
-        self, nats_url: str
-    ) -> None:
+    async def test_loop_recovers_after_transient_disconnect(self, nats_url: str) -> None:
         """Forcibly close the underlying NATS client so the loop enters the
         reconnect-attempt branch (lines 172-194), then succeeds against the
         live server and resets the backoff exponent (line 182).
@@ -807,9 +795,7 @@ class TestLifespanAbort:
         disconnected = Publisher()  # never connected — is_connected is False
         app.state.publisher = disconnected
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/health")
 
         assert response.status_code == 503
@@ -834,9 +820,7 @@ class TestLifespanAbort:
         }
         body_bytes = json.dumps(payload).encode()
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/webhook",
                 content=body_bytes,
@@ -1068,7 +1052,7 @@ class TestRequestIdInNats:
                     content=body_bytes,
                     headers={
                         "Content-Type": "application/json",
-                        "X-Webhook-Signature": _sign(body_bytes),
+                        "X-Webhook-Signature": sign_body(body_bytes, INTEGRATION_TEST_SECRET),
                         "X-Request-ID": my_request_id,
                     },
                 )
@@ -1173,7 +1157,7 @@ class TestJetStreamAck:
                     content=body_bytes,
                     headers={
                         "Content-Type": "application/json",
-                        "X-Webhook-Signature": _sign(body_bytes),
+                        "X-Webhook-Signature": sign_body(body_bytes, INTEGRATION_TEST_SECRET),
                     },
                 )
             assert response.status_code == 202
@@ -1229,9 +1213,7 @@ class TestStopEventReuseIntegration:
             assert second_task is not None
             assert second_task is not first_task
             assert first_task.done(), "stale reconnect task must be cancelled"
-            assert pub._stop_event is original_event, (
-                "second connect() must not rebind _stop_event"
-            )
+            assert pub._stop_event is original_event, "second connect() must not rebind _stop_event"
             assert not pub._stop_event.is_set(), (
                 "connect() must clear the reused Event so the new loop can run"
             )
@@ -1242,9 +1224,7 @@ class TestStopEventReuseIntegration:
         assert pub._stop_event is original_event
         assert pub._stop_event.is_set()
 
-    async def test_reconnect_after_disconnect_clears_stop_event(
-        self, nats_url: str
-    ) -> None:
+    async def test_reconnect_after_disconnect_clears_stop_event(self, nats_url: str) -> None:
         """``connect()`` after ``disconnect()`` must clear the existing Event
         so the new ``_reconnect_loop`` does not exit immediately
         (publisher.py line 116, post-disconnect rearm path).
