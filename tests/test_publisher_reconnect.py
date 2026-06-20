@@ -334,18 +334,31 @@ class TestReconnectLoopHealthState:
         pub = Publisher()
         assert pub.last_reconnect_attempt_at is None
         assert pub.consecutive_reconnect_failures == 0
-        assert pub.reconnect_loop_running is False
+        assert pub.reconnect_loop_active is False
 
     @pytest.mark.asyncio
-    async def test_reconnect_loop_running_true_after_connect(self) -> None:
+    async def test_reconnect_loop_active_true_after_connect(self) -> None:
         pub = Publisher()
         mock_nc = _make_mock_nc()
         await _do_connect(pub, mock_nc)
         try:
-            assert pub.reconnect_loop_running is True
+            assert pub.reconnect_loop_active is True
         finally:
             await pub.disconnect()
-        assert pub.reconnect_loop_running is False
+        assert pub.reconnect_loop_active is False
+
+    @pytest.mark.asyncio
+    async def test_reconnect_loop_active_false_when_task_done(self) -> None:
+        """Issue #446: a completed/crashed _reconnect_task must report inactive."""
+        pub = Publisher()
+
+        async def _noop() -> None:
+            return
+
+        pub._reconnect_task = asyncio.ensure_future(_noop())
+        await pub._reconnect_task
+        assert pub._reconnect_task.done()
+        assert pub.reconnect_loop_active is False
 
     @pytest.mark.asyncio
     async def test_failed_reconnect_increments_failure_counter(self) -> None:

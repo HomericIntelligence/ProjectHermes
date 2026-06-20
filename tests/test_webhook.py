@@ -21,7 +21,7 @@ def _build_client(
     last_error: str = "",
     last_reconnect_attempt_at: object = None,
     consecutive_reconnect_failures: int = 0,
-    reconnect_loop_running: bool = False,
+    reconnect_loop_active: bool = False,
 ) -> TestClient:
     """Build a TestClient with a mocked Publisher and a known webhook secret."""
     from hermes.config import Settings, get_settings
@@ -39,7 +39,7 @@ def _build_client(
     mock_publisher.last_error = last_error
     mock_publisher.last_reconnect_attempt_at = last_reconnect_attempt_at
     mock_publisher.consecutive_reconnect_failures = consecutive_reconnect_failures
-    mock_publisher.reconnect_loop_running = reconnect_loop_running
+    mock_publisher.reconnect_loop_active = reconnect_loop_active
 
     # Inject the mock before the test client starts
     app.state.publisher = mock_publisher
@@ -126,7 +126,7 @@ class TestHealthEndpoint:
         mock_publisher.last_error = ""
         mock_publisher.last_reconnect_attempt_at = None
         mock_publisher.consecutive_reconnect_failures = 0
-        mock_publisher.reconnect_loop_running = False
+        mock_publisher.reconnect_loop_active = False
         mock_publisher.publish = AsyncMock()
         app.state.publisher = mock_publisher
 
@@ -186,7 +186,7 @@ class TestHealthEndpoint:
         # ``__init__``, so we must set them explicitly here.
         mock_publisher.last_reconnect_attempt_at = None
         mock_publisher.consecutive_reconnect_failures = 0
-        mock_publisher.reconnect_loop_running = False
+        mock_publisher.reconnect_loop_active = False
         mock_publisher.publish = AsyncMock()
         app.state.publisher = mock_publisher
 
@@ -216,8 +216,8 @@ class TestHealthEndpoint:
         assert body["last_reconnect_attempt_at"] is None
         assert "consecutive_reconnect_failures" in body
         assert body["consecutive_reconnect_failures"] == 0
-        assert "reconnect_loop_running" in body
-        assert body["reconnect_loop_running"] is False
+        assert "nats_reconnect_loop_active" in body
+        assert body["nats_reconnect_loop_active"] is False
 
     def test_health_surfaces_reconnect_loop_state(self) -> None:
         """Issue #528: /health reflects publisher reconnect-loop state."""
@@ -227,12 +227,12 @@ class TestHealthEndpoint:
         client = _build_client(
             last_reconnect_attempt_at=ts,
             consecutive_reconnect_failures=4,
-            reconnect_loop_running=True,
+            reconnect_loop_active=True,
         )
         body = client.get("/health").json()
         assert body["last_reconnect_attempt_at"].startswith("2026-05-12T10:30:00")
         assert body["consecutive_reconnect_failures"] == 4
-        assert body["reconnect_loop_running"] is True
+        assert body["nats_reconnect_loop_active"] is True
 
 
 class TestReadyEndpoint:

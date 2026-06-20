@@ -74,7 +74,7 @@ class HealthResponse(BaseModel):
     nats_retry_interval: float = 5.0
     last_reconnect_attempt_at: datetime | None = None
     consecutive_reconnect_failures: int = 0
-    reconnect_loop_running: bool = False
+    nats_reconnect_loop_active: bool = False
 
 
 class WebhookAcceptedResponse(BaseModel):
