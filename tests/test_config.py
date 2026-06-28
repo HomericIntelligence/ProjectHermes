@@ -231,14 +231,18 @@ class TestSubjectsRateLimit:
         s = Settings()
         assert s.subjects_rate_limit == "1000/hour"
 
-    def test_subjects_rate_limit_rejects_missing_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_subjects_rate_limit_rejects_missing_period(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("SUBJECTS_RATE_LIMIT", "100")
         from hermes.config import Settings
 
         with pytest.raises(ValidationError):
             Settings()
 
-    def test_subjects_rate_limit_rejects_invalid_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_subjects_rate_limit_rejects_invalid_period(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("SUBJECTS_RATE_LIMIT", "100/week")
         from hermes.config import Settings
 
@@ -293,6 +297,58 @@ class TestWebhookSecretProductionWarning:
             )
         warning_messages = [call.args[0] for call in mock_warn.call_args_list if call.args]
         assert any("WEBHOOK_SECRET is NOT SET" in msg for msg in warning_messages)
+
+
+class TestDeadLetterKeyProductionWarning:
+    """DEAD_LETTER_API_KEY unset + HERMES_HOST=0.0.0.0 must emit a warning; otherwise silent (#519)."""
+
+    def test_no_warning_when_key_set_and_host_0000(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                dead_letter_api_key="a" * 32,
+                hermes_host="0.0.0.0",
+                webhook_secret="b" * 32,
+                _env_file=None,
+            )
+        for call in mock_warn.call_args_list:
+            assert "DEAD_LETTER_API_KEY is not set" not in (call.args[0] if call.args else "")
+
+    def test_no_warning_when_key_empty_and_host_localhost(self) -> None:
+        """Regression guard for #519: no warning when bound to loopback (test/dev default)."""
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                dead_letter_api_key="",
+                hermes_host="127.0.0.1",
+                _env_file=None,
+            )
+        for call in mock_warn.call_args_list:
+            assert "DEAD_LETTER_API_KEY is not set" not in (call.args[0] if call.args else "")
+
+    def test_loud_warning_when_key_empty_and_host_0000(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                dead_letter_api_key="",
+                hermes_host="0.0.0.0",
+                webhook_secret="b" * 32,
+                _env_file=None,
+            )
+        warning_messages = [call.args[0] for call in mock_warn.call_args_list if call.args]
+        assert any("DEAD_LETTER_API_KEY is not set" in msg for msg in warning_messages)
 
 
 class TestAgamemnonFieldsRemoved:

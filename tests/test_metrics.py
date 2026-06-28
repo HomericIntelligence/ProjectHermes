@@ -11,8 +11,6 @@ from fastapi.testclient import TestClient
 from tests.helpers import TEST_SECRET, sign_body
 
 
-
-
 def _build_client(dead_letters: list | None = None) -> TestClient:
     from hermes.server import app
     from hermes.publisher import Publisher
@@ -237,9 +235,7 @@ class TestRequireAdminKeyIsolated:
     _KEY = "isolated-test-dead-letter-key-xxxxx"  # 37 chars, satisfies >=32 validator
 
     @staticmethod
-    def _call(
-        key_configured: str, header_value: str
-    ) -> None:
+    def _call(key_configured: str, header_value: str) -> None:
         """Invoke ``_require_dead_letter_key`` with an isolated Settings instance."""
         import asyncio
 

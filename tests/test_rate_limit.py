@@ -20,7 +20,6 @@ _VALID_PAYLOAD = {
 }
 
 
-
 @contextmanager
 def _rate_limit_client(
     rate_limit: str = "5/minute",

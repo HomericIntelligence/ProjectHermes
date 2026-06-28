@@ -477,17 +477,13 @@ class TestStopEventLifetime:
 
         mock_nc1 = _make_mock_nc()
         await _do_connect(pub, mock_nc1)
-        assert pub._stop_event is original_event, (
-            "connect() must not replace _stop_event"
-        )
+        assert pub._stop_event is original_event, "connect() must not replace _stop_event"
 
         # Second connect() without intervening disconnect() (simulates retry
         # after a startup failure described in #524).
         mock_nc2 = _make_mock_nc()
         await _do_connect(pub, mock_nc2)
-        assert pub._stop_event is original_event, (
-            "second connect() must not replace _stop_event"
-        )
+        assert pub._stop_event is original_event, "second connect() must not replace _stop_event"
 
         # And disconnect() must still cleanly stop the (latest) loop via the
         # shared Event.

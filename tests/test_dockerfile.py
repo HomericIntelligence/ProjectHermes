@@ -49,12 +49,8 @@ def test_pyproject_dependencies_all_versioned() -> None:
 def test_dockerfile_copies_pyproject_before_pip_install() -> None:
     """COPY pyproject.toml must appear before the RUN pip install line in the builder stage."""
     lines = _dockerfile_lines()
-    copy_idx = next(
-        (i for i, ln in enumerate(lines) if "COPY pyproject.toml" in ln), None
-    )
-    pip_idx = next(
-        (i for i, ln in enumerate(lines) if _PIP_INSTALL_RE.search(ln)), None
-    )
+    copy_idx = next((i for i, ln in enumerate(lines) if "COPY pyproject.toml" in ln), None)
+    pip_idx = next((i for i, ln in enumerate(lines) if _PIP_INSTALL_RE.search(ln)), None)
     assert copy_idx is not None, "Dockerfile has no 'COPY pyproject.toml' line"
     assert pip_idx is not None, "Dockerfile has no 'pip install' line"
     assert copy_idx < pip_idx, (
@@ -92,7 +88,21 @@ def test_dockerfile_no_bare_unversioned_pip_packages() -> None:
         tokens = line.split()
         _SHELL_SEPARATORS = {"&&", "||", ";", "|", "&"}
         _CMD_WORDS = {"pip", "install", "run", "RUN", "python3", "python", "\\"}
-        _FILE_FLAGS = {"-r", "-c", "--requirement", "--constraint", "-t", "--target", "--prefix", "--root", "--cache-dir", "--index-url", "--extra-index-url", "--find-links", "-f"}
+        _FILE_FLAGS = {
+            "-r",
+            "-c",
+            "--requirement",
+            "--constraint",
+            "-t",
+            "--target",
+            "--prefix",
+            "--root",
+            "--cache-dir",
+            "--index-url",
+            "--extra-index-url",
+            "--find-links",
+            "-f",
+        }
         skip_next = False
         for token in tokens:
             if skip_next:
@@ -117,31 +127,28 @@ def test_dockerfile_no_bare_unversioned_pip_packages() -> None:
 class TestDockerfileTini:
     def test_tini_installed(self) -> None:
         lines = _dockerfile_lines()
-        assert any("tini" in line for line in lines), \
+        assert any("tini" in line for line in lines), (
             "Dockerfile must install tini for PID-1 signal forwarding"
+        )
 
     def test_entrypoint_uses_tini(self) -> None:
         lines = _dockerfile_lines()
         entrypoint_lines = [ln for ln in lines if ln.strip().startswith("ENTRYPOINT")]
         assert entrypoint_lines, "Dockerfile must have an ENTRYPOINT directive"
-        assert "tini" in entrypoint_lines[-1], \
+        assert "tini" in entrypoint_lines[-1], (
             'ENTRYPOINT must use tini (e.g. ENTRYPOINT ["tini", "--"])'
+        )
 
     def test_cmd_preserved(self) -> None:
         lines = _dockerfile_lines()
         cmd_lines = [ln for ln in lines if ln.startswith("CMD")]
         assert cmd_lines, "Dockerfile must retain a CMD directive"
-        assert "hermes.server" in cmd_lines[-1], \
-            "CMD must still launch the hermes server"
+        assert "hermes.server" in cmd_lines[-1], "CMD must still launch the hermes server"
 
     def test_entrypoint_before_cmd(self) -> None:
         lines = _dockerfile_lines()
-        entrypoint_idx = next(
-            (i for i, ln in enumerate(lines) if ln.startswith("ENTRYPOINT")), -1
-        )
-        cmd_idx = next(
-            (i for i, ln in enumerate(lines) if ln.startswith("CMD")), -1
-        )
+        entrypoint_idx = next((i for i, ln in enumerate(lines) if ln.startswith("ENTRYPOINT")), -1)
+        cmd_idx = next((i for i, ln in enumerate(lines) if ln.startswith("CMD")), -1)
         assert entrypoint_idx != -1, "ENTRYPOINT not found"
         assert cmd_idx != -1, "CMD not found"
         assert entrypoint_idx < cmd_idx, "ENTRYPOINT must appear before CMD"

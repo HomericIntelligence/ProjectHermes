@@ -153,10 +153,22 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _warn_dead_letter_key_unset(self) -> "Settings":
-        if not self.dead_letter_api_key:
+        """Emit a loud WARNING when DEAD_LETTER_API_KEY is unset while bound to all interfaces.
+
+        Production is inferred when ``hermes_host`` is ``0.0.0.0`` (listening on all interfaces),
+        matching ``_warn_hmac_disabled_in_production``.  Without an API key, GET /dead-letters
+        and DELETE /dead-letters auth is bypassed (opt-in when unset) and accessible to any
+        client that can reach Hermes.
+
+        Guarding on ``0.0.0.0`` suppresses the warning in dev/test (where Settings() is
+        instantiated repeatedly with the default ``127.0.0.1`` host) — see #519.
+        """
+        if not self.dead_letter_api_key and self.hermes_host == "0.0.0.0":
             _config_logger.warning(
                 "DEAD_LETTER_API_KEY is not set — GET /dead-letters and DELETE /dead-letters "
-                "are unauthenticated and accessible to any client that can reach Hermes."
+                "auth is bypassed (opt-in when unset); any client that can reach Hermes has "
+                "access.  Set DEAD_LETTER_API_KEY to a random string of at least 32 characters "
+                "to require authentication."
             )
         return self
 

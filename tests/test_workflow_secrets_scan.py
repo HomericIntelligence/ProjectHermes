@@ -3,12 +3,7 @@
 import pathlib
 import re
 
-_WORKFLOW = (
-    pathlib.Path(__file__).parent.parent
-    / ".github"
-    / "workflows"
-    / "_required.yml"
-)
+_WORKFLOW = pathlib.Path(__file__).parent.parent / ".github" / "workflows" / "_required.yml"
 
 
 def test_gitleaks_advisory_exit_code_absent() -> None:

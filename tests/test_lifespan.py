@@ -258,8 +258,8 @@ async def test_lifespan_warns_when_webhook_secret_unset(
             pass
 
     warning_messages = [c.args[0] for c in mock_logger.warning.call_args_list if c.args]
-    assert any(
-        "HMAC webhook validation is DISABLED" in msg for msg in warning_messages
-    ), f"expected HMAC-disabled warning, got: {warning_messages!r}"
+    assert any("HMAC webhook validation is DISABLED" in msg for msg in warning_messages), (
+        f"expected HMAC-disabled warning, got: {warning_messages!r}"
+    )
 
     get_settings.cache_clear()  # type: ignore[attr-defined]
