@@ -267,6 +267,18 @@ jobs:
             htmlcov/
             coverage.xml
 
+      - name: Upload coverage to Codecov
+        if: always() && env.CODECOV_TOKEN != ''
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe  # v5.5.4
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: hermes-unit
+          fail_ci_if_error: false
+          verbose: true
+
   integration-tests:
     name: integration-tests
     runs-on: ubuntu-24.04

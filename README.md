@@ -1,5 +1,7 @@
 # ProjectHermes
 
+[![codecov](https://img.shields.io/codecov/c/github/HomericIntelligence/ProjectHermes?logo=codecov)](https://codecov.io/gh/HomericIntelligence/ProjectHermes)
+
 ProjectHermes bridges external webhooks (GitHub, Slack, third-party APIs) to
 [NATS JetStream](https://docs.nats.io/nats-concepts/jetstream) for pub/sub fan-out and event
 replay across the HomericIntelligence ecosystem.

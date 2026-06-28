@@ -1,0 +1,27 @@
+codecov:
+  require_ci_to_pass: false  # Codecov never blocks CI; only informational
+
+coverage:
+  precision: 2
+  round: down
+  range: "80...100"
+
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        informational: true   # never fails a PR; trend visualisation only
+    patch:
+      default:
+        informational: true   # no new gate on patch coverage (issue scope: badge + trends)
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+
+ignore:
+  - "tests/"
+  - "scripts/"
+  - "docs/"
