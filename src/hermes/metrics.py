@@ -60,3 +60,8 @@ DEAD_LETTER_QUEUE_ALERTS: Counter = Counter(
     "hermes_dead_letter_queue_alerts_total",
     "Number of times the dead-letter queue depth crossed the alert threshold",
 )
+
+DEAD_LETTER_EVICTIONS: Counter = Counter(
+    "hermes_dead_letter_evictions_total",
+    "Number of times the in-memory dead-letter deque evicted its oldest entry at capacity",
+)

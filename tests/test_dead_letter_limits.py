@@ -4,13 +4,18 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import timedelta
+from datetime import datetime, timezone, timedelta
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from hermes.config import Settings
+
+if TYPE_CHECKING:
+    from hermes.models import WebhookPayload
+    from hermes.publisher import Publisher
 
 
 # ---------------------------------------------------------------------------
@@ -424,3 +429,70 @@ class TestDeadLettersMaxLimitEnforcement:
         body = client.get("/dead-letters?limit=999").json()
         assert "50" in body["detail"]
         assert "999" in body["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Publisher: eviction warning and counter at capacity (issue #533)
+# ---------------------------------------------------------------------------
+
+
+class TestDeadLetterEvictionWarning:
+    """Issue #533: explicit signal when the in-memory deque evicts at capacity."""
+
+    @pytest.fixture
+    def publisher(self, monkeypatch: pytest.MonkeyPatch) -> "Publisher":
+        from hermes.config import Settings, get_settings
+        from hermes.publisher import Publisher
+
+        monkeypatch.setattr(
+            "hermes.config.get_settings",
+            lambda: Settings(dead_letter_max_size=2, dead_letter_alert_threshold=0.8),
+        )
+        get_settings.cache_clear()
+        p = Publisher(enable_dead_letter=True)
+        p._js = AsyncMock()
+        p._js.publish = AsyncMock()
+        return p
+
+    @staticmethod
+    def _payload(i: int) -> "WebhookPayload":
+        from hermes.models import WebhookPayload
+
+        return WebhookPayload(
+            event=f"unknown.evt.{i}", data={}, timestamp=datetime.now(timezone.utc)
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_warning_before_capacity(
+        self, publisher: "Publisher", caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            await publisher.publish(self._payload(0))
+            await publisher.publish(self._payload(1))  # fills to maxlen=2
+        assert "oldest inspection entry evicted" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_eviction_emits_distinct_warning(
+        self, publisher: "Publisher", caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        for i in range(2):
+            await publisher.publish(self._payload(i))
+        with caplog.at_level(logging.WARNING):
+            await publisher.publish(self._payload(2))  # evicts oldest
+        assert "dead-letter in-memory queue full (max=2)" in caplog.text
+        assert "evicted" in caplog.text
+        assert publisher.dead_letter_count == 2
+
+    @pytest.mark.asyncio
+    async def test_eviction_increments_counter(self, publisher: "Publisher") -> None:
+        from prometheus_client import REGISTRY
+
+        before = REGISTRY.get_sample_value("hermes_dead_letter_evictions_total") or 0.0
+        for i in range(3):  # third publish evicts
+            await publisher.publish(self._payload(i))
+        after = REGISTRY.get_sample_value("hermes_dead_letter_evictions_total") or 0.0
+        assert after == before + 1.0
