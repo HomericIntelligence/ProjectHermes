@@ -270,32 +270,27 @@ class TestGithubWarning:
 class TestAppendSummary:
     """Test append_summary()."""
 
-    def test_appends_to_summary_file(self, mod: Any) -> None:
+    def test_appends_to_summary_file(self, mod: Any, monkeypatch: Any) -> None:
         """Append lines to $GITHUB_STEP_SUMMARY when set."""
         with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
             summary_path = f.name
         try:
-            os.environ["GITHUB_STEP_SUMMARY"] = summary_path
+            monkeypatch.setenv("GITHUB_STEP_SUMMARY", summary_path)
             mod.append_summary(["line1", "line2"])
             content = Path(summary_path).read_text(encoding="utf-8")
             assert content == "line1\nline2\n"
         finally:
             Path(summary_path).unlink()
-            del os.environ["GITHUB_STEP_SUMMARY"]
 
-    def test_skips_when_summary_unset(self, mod: Any) -> None:
+    def test_skips_when_summary_unset(self, mod: Any, monkeypatch: Any) -> None:
         """Do nothing when $GITHUB_STEP_SUMMARY is not set."""
-        if "GITHUB_STEP_SUMMARY" in os.environ:
-            del os.environ["GITHUB_STEP_SUMMARY"]
+        monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
         mod.append_summary(["line1"])  # Should not raise.
 
-    def test_handles_write_failure(self, mod: Any) -> None:
+    def test_handles_write_failure(self, mod: Any, monkeypatch: Any) -> None:
         """Never raise on write failure (advisory contract)."""
-        os.environ["GITHUB_STEP_SUMMARY"] = "/nonexistent/path/summary.txt"
-        try:
-            mod.append_summary(["line1"])  # Should not raise.
-        finally:
-            del os.environ["GITHUB_STEP_SUMMARY"]
+        monkeypatch.setenv("GITHUB_STEP_SUMMARY", "/nonexistent/path/summary.txt")
+        mod.append_summary(["line1"])  # Should not raise.
 
 
 class TestRun:
@@ -413,7 +408,7 @@ class TestRun:
             assert "nothing to check" in captured.out.lower()
 
     def test_summary_table_appended_when_warnings(
-        self, mod: Any, tmp_project: dict[str, Path]
+        self, mod: Any, tmp_project: dict[str, Path], monkeypatch: Any
     ) -> None:
         """Append summary table to $GITHUB_STEP_SUMMARY when warnings issued."""
         _write_workflow(
@@ -424,7 +419,7 @@ class TestRun:
         with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
             summary_path = f.name
         try:
-            os.environ["GITHUB_STEP_SUMMARY"] = summary_path
+            monkeypatch.setenv("GITHUB_STEP_SUMMARY", summary_path)
             with _mock_root(mod, tmp_project["root"]):
                 result = mod._run()
                 assert result == 0
@@ -435,7 +430,6 @@ class TestRun:
             assert "88.00" in content
         finally:
             Path(summary_path).unlink()
-            del os.environ["GITHUB_STEP_SUMMARY"]
 
 
 class TestMain:

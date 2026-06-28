@@ -184,7 +184,8 @@ def main() -> int:
     """Entry point; always returns 0 (advisory contract)."""
     try:
         return _run()
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — see module docstring.
+        print(f"NOTE: coverage-floor advisory aborted ({type(exc).__name__}: {exc}).")
         return 0
 
 
