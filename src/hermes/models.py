@@ -61,6 +61,7 @@ class HealthResponse(BaseModel):
     nats_connected: bool
     shutting_down: bool = False
     hmac_validation_enabled: bool = False
+    dead_letter_api_key_configured: bool = False
     hermes_public_url: str | None = None
     inflight_requests: int = 0
     dead_letter_count: int = 0
