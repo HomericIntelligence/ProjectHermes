@@ -100,6 +100,8 @@ async def test_two_publishers_desynchronise_under_jitter() -> None:
                     return None
                 raise asyncio.TimeoutError
             # _connect_internal path: fail it so the loop iterates again.
+            if hasattr(awaitable, "close"):
+                awaitable.close()
             raise OSError("simulated reconnect failure")
 
         async def drive() -> None:
