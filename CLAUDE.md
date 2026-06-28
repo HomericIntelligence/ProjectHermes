@@ -217,6 +217,7 @@ just lint       # ruff check src tests
 just format     # ruff format src tests
 just health     # curl /health endpoint
 just nats-start # start NATS server
+just lint-openapi # spectral lint openapi.json (mirrors pre-commit & CI; #434)
 
 python -m hermes # alternative to 'just start' — runs the server directly
 ```

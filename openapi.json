@@ -8,8 +8,8 @@
   "paths": {
     "/health": {
       "get": {
-        "summary": "Health",
-        "description": "Return service health and NATS connection status. Returns 503 when NATS is disconnected.",
+        "summary": "Health probe",
+        "description": "Return service health, NATS connection status, dead-letter queue depth, shutdown state, and reconnect timing. Returns 503 when NATS is disconnected so load balancers can route around the degraded instance.",
         "operationId": "health_health_get",
         "responses": {
           "200": {
@@ -18,6 +18,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HealthResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "nats_connected": true,
+                  "shutting_down": false,
+                  "hmac_validation_enabled": true,
+                  "inflight_requests": 0,
+                  "dead_letter_count": 0,
+                  "dead_letter_queue_depth": 0,
+                  "dead_letter_queue_capacity": 1000,
+                  "dead_letter_queue_alert_threshold_pct": 0.0,
+                  "timeouts": {
+                    "nats_connect": 5.0,
+                    "nats_publish": 5.0
+                  },
+                  "nats_reconnect_count": 0,
+                  "nats_last_error": "",
+                  "nats_retry_attempts": 3,
+                  "nats_retry_interval": 5.0,
+                  "consecutive_reconnect_failures": 0,
+                  "reconnect_loop_running": false
                 }
               }
             }
@@ -37,7 +58,7 @@
     },
     "/version": {
       "get": {
-        "summary": "Get Version",
+        "summary": "Version",
         "description": "Return the installed package version.",
         "operationId": "get_version_version_get",
         "responses": {
@@ -47,6 +68,9 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VersionResponse"
+                },
+                "example": {
+                  "version": "0.1.0"
                 }
               }
             }
@@ -56,8 +80,8 @@
     },
     "/ready": {
       "get": {
-        "summary": "Ready",
-        "description": "Readiness probe \u2014 returns 503 when NATS is not connected.",
+        "summary": "Readiness probe",
+        "description": "Check if the service is ready to accept requests. Returns 503 when NATS is not connected.",
         "operationId": "ready_ready_get",
         "responses": {
           "200": {
@@ -68,6 +92,9 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Ready Ready Get"
+                },
+                "example": {
+                  "ready": true
                 }
               }
             }
@@ -87,8 +114,8 @@
     },
     "/webhook": {
       "post": {
-        "summary": "Receive Webhook",
-        "description": "Receive an external webhook, validate its signature, and publish to NATS.",
+        "summary": "Receive webhook",
+        "description": "Receive an external webhook, validate its HMAC signature, parse the payload, and publish the event to NATS JetStream. Returns 202 on acceptance; signature/payload/connectivity failures map to 401/422/503.",
         "operationId": "receive_webhook_webhook_post",
         "responses": {
           "202": {
@@ -97,6 +124,11 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WebhookAcceptedResponse"
+                },
+                "example": {
+                  "status": "accepted",
+                  "event": "agent.registered",
+                  "request_id": "01HZ0000000000000000000000"
                 }
               }
             }
@@ -146,7 +178,7 @@
     },
     "/subjects": {
       "get": {
-        "summary": "List Subjects",
+        "summary": "List subjects",
         "description": "Return the list of NATS subjects that have been published to.",
         "operationId": "list_subjects_subjects_get",
         "responses": {
@@ -156,6 +188,14 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SubjectsResponse"
+                },
+                "example": {
+                  "subjects": [
+                    "hi.agents.host1.agent1.registered",
+                    "hi.tasks.team1.task1.created"
+                  ],
+                  "hermes_public_url": "http://localhost:8080",
+                  "active_subjects_max": 100
                 }
               }
             }
@@ -165,8 +205,8 @@
     },
     "/metrics": {
       "get": {
-        "summary": "Metrics",
-        "description": "Expose Prometheus metrics in text format.",
+        "summary": "Prometheus metrics",
+        "description": "Expose Prometheus exposition-format metrics for all webhook and NATS counters.",
         "operationId": "metrics_metrics_get",
         "responses": {
           "200": {
@@ -174,6 +214,9 @@
             "content": {
               "application/json": {
                 "schema": {}
+              },
+              "text/plain; version=0.0.4; charset=utf-8": {
+                "example": "# HELP hermes_webhooks_received_total Total webhooks received\n# TYPE hermes_webhooks_received_total counter\nhermes_webhooks_received_total{event_type=\"agent.registered\"} 0\n"
               }
             }
           }
@@ -182,8 +225,8 @@
     },
     "/dead-letters": {
       "get": {
-        "summary": "Dead Letters",
-        "description": "Return the in-memory dead-letter queue with optional pagination.\n\nQuery params:\n- ``offset``: number of items to skip (default 0).\n- ``limit``: maximum items to return (default: ``dead_letter_page_size_default``;\n  hard ceiling: ``dead_letter_page_size_max``).",
+        "summary": "Get dead letters",
+        "description": "Return the in-memory dead-letter queue with optional pagination.",
         "operationId": "dead_letters_dead_letters_get",
         "parameters": [
           {
@@ -230,6 +273,21 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DeadLettersResponse"
+                },
+                "example": {
+                  "total": 1,
+                  "offset": 0,
+                  "limit": 100,
+                  "items": [
+                    {
+                      "subject": "hi.agents.host1.agent1.unknown_event",
+                      "payload": {
+                        "event": "unknown_event",
+                        "data": {}
+                      },
+                      "timestamp": "2026-06-04T12:00:00Z"
+                    }
+                  ]
                 }
               }
             }
@@ -247,7 +305,7 @@
         }
       },
       "delete": {
-        "summary": "Drain Dead Letters",
+        "summary": "Drain dead letters",
         "description": "Drain (clear) the in-memory dead-letter queue and return the count of drained items.",
         "operationId": "drain_dead_letters_dead_letters_delete",
         "parameters": [
@@ -273,6 +331,9 @@
                     "type": "integer"
                   },
                   "title": "Response Drain Dead Letters Dead Letters Delete"
+                },
+                "example": {
+                  "drained": 1
                 }
               }
             }
@@ -292,7 +353,7 @@
     },
     "/events": {
       "get": {
-        "summary": "List Events",
+        "summary": "List events",
         "description": "Return the canonical set of supported webhook event types.",
         "operationId": "list_events_events_get",
         "responses": {
@@ -309,6 +370,18 @@
                   },
                   "type": "object",
                   "title": "Response List Events Events Get"
+                },
+                "example": {
+                  "agent_events": [
+                    "agent.registered"
+                  ],
+                  "task_events": [
+                    "task.created"
+                  ],
+                  "all_events": [
+                    "agent.registered",
+                    "task.created"
+                  ]
                 }
               }
             }
@@ -415,6 +488,11 @@
           "hmac_validation_enabled": {
             "type": "boolean",
             "title": "Hmac Validation Enabled",
+            "default": false
+          },
+          "dead_letter_api_key_configured": {
+            "type": "boolean",
+            "title": "Dead Letter Api Key Configured",
             "default": false
           },
           "hermes_public_url": {

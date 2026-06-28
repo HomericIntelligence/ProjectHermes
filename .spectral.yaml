@@ -1,0 +1,10 @@
+# Spectral ruleset for ProjectHermes openapi.json (issue #434).
+# Extends spectral:oas (Spectral's built-in OpenAPI 3.x rules) and bumps the
+# two rules issue #434 names — missing operation descriptions and missing
+# response examples — to error severity.
+extends: ["spectral:oas"]
+rules:
+  # Issue #434 — missing endpoint descriptions must fail the lint.
+  operation-description: error
+  # Issue #434 — missing or invalid response media examples must fail the lint.
+  oas3-valid-media-example: error

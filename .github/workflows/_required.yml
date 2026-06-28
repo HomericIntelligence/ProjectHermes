@@ -450,6 +450,24 @@ jobs:
             xargs check-jsonschema \
               --schemafile https://json.schemastore.org/github-workflow
 
+  openapi-lint:
+    # Spectral lint for openapi.json (issue #434). Mirrors the
+    # `spectral-openapi` pre-commit hook so the rule is enforced both locally
+    # and in required CI.
+    name: openapi-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: lint
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+      - name: Spectral lint openapi.json
+        uses: stoplightio/spectral-action@6416fd018ae38e60136775066eb3e98172143141  # v0.8.13
+        with:
+          file_glob: openapi.json
+          spectral_ruleset: .spectral.yaml
+
   deps-version-sync:
     name: deps/version-sync
     runs-on: ubuntu-24.04

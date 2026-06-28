@@ -101,6 +101,11 @@ smoke-readonly-fs:
 export-openapi:
     pixi run python scripts/export-openapi.py
 
+# Lint openapi.json with Spectral (matches the pre-commit hook and CI openapi-lint job)
+lint-openapi:
+    docker run --rm -v "$PWD":/work -w /work stoplight/spectral:6.15.1 \
+        lint --ruleset .spectral.yaml --fail-severity=error openapi.json
+
 # === Security ===
 
 # Audit dependencies for known vulnerabilities

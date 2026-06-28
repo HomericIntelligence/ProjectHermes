@@ -64,6 +64,19 @@ repos:
         entry: bash -c 'docker compose config --quiet'
         files: ^docker-compose\.ya?ml$
         pass_filenames: false
+      - id: spectral-openapi
+        name: "spectral lint openapi.json (OpenAPI 3.x)"
+        description: >
+          Validates openapi.json against the spectral:oas ruleset plus the
+          repo's `.spectral.yaml` overrides. Catches missing required fields,
+          broken $refs, missing descriptions/examples, and other style
+          regressions (issue #434, follow-up to #320). Runs via Docker so the
+          host needs no Node toolchain.
+        language: system
+        entry: bash -c 'docker run --rm -v "$PWD":/work -w /work stoplight/spectral:6.15.1 lint --ruleset .spectral.yaml --fail-severity=error openapi.json'
+        files: ^(openapi\.json|\.spectral\.yaml)$
+        pass_filenames: false
+
 
       - id: no-latest-image-tags
         name: "forbid :latest image tags in ops manifests"

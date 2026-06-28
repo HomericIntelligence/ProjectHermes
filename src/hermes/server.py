@@ -338,7 +338,43 @@ app.add_middleware(SlowAPIMiddleware)
 @app.get(
     "/health",
     response_model=HealthResponse,
-    responses={503: {"model": ErrorResponse, "description": "NATS not reachable"}},
+    summary="Health probe",
+    description=(
+        "Return service health, NATS connection status, dead-letter queue depth, "
+        "shutdown state, and reconnect timing. Returns 503 when NATS is "
+        "disconnected so load balancers can route around the degraded instance."
+    ),
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "ok",
+                        "nats_connected": True,
+                        "shutting_down": False,
+                        "hmac_validation_enabled": True,
+                        "inflight_requests": 0,
+                        "dead_letter_count": 0,
+                        "dead_letter_queue_depth": 0,
+                        "dead_letter_queue_capacity": 1000,
+                        "dead_letter_queue_alert_threshold_pct": 0.0,
+                        "timeouts": {
+                            "nats_connect": 5.0,
+                            "nats_publish": 5.0,
+                        },
+                        "nats_reconnect_count": 0,
+                        "nats_last_error": "",
+                        "nats_retry_attempts": 3,
+                        "nats_retry_interval": 5.0,
+                        "last_reconnect_attempt_at": None,
+                        "consecutive_reconnect_failures": 0,
+                        "reconnect_loop_running": False,
+                    }
+                }
+            }
+        },
+        503: {"model": ErrorResponse, "description": "NATS not reachable"},
+    },
 )
 async def health(response: Response) -> HealthResponse:
     """Return service health and NATS connection status. Returns 503 when NATS is disconnected."""
@@ -376,7 +412,23 @@ async def health(response: Response) -> HealthResponse:
     )
 
 
-@app.get("/version", response_model=VersionResponse)
+@app.get(
+    "/version",
+    response_model=VersionResponse,
+    summary="Version",
+    description="Return the installed package version.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "version": __version__,
+                    }
+                }
+            }
+        },
+    },
+)
 async def get_version() -> VersionResponse:
     """Return the installed package version."""
     return VersionResponse(version=__version__)
@@ -384,7 +436,20 @@ async def get_version() -> VersionResponse:
 
 @app.get(
     "/ready",
-    responses={503: {"model": ErrorResponse, "description": "NATS not connected"}},
+    summary="Readiness probe",
+    description="Check if the service is ready to accept requests. Returns 503 when NATS is not connected.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "ready": True,
+                    }
+                }
+            }
+        },
+        503: {"model": ErrorResponse, "description": "NATS not connected"},
+    },
 )
 async def ready(response: Response) -> dict[str, object]:
     """Readiness probe — returns 503 when NATS is not connected."""
@@ -399,7 +464,24 @@ async def ready(response: Response) -> dict[str, object]:
     "/webhook",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=WebhookAcceptedResponse,
+    summary="Receive webhook",
+    description=(
+        "Receive an external webhook, validate its HMAC signature, parse the "
+        "payload, and publish the event to NATS JetStream. Returns 202 on "
+        "acceptance; signature/payload/connectivity failures map to 401/422/503."
+    ),
     responses={
+        202: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "accepted",
+                        "event": "agent.registered",
+                        "request_id": "01HZ0000000000000000000000",
+                    }
+                }
+            }
+        },
         401: {"model": ErrorResponse, "description": "Invalid webhook signature"},
         422: {"model": ErrorResponse, "description": "Malformed or invalid payload"},
         429: {"model": ErrorResponse, "description": "Rate limit exceeded"},
@@ -488,6 +570,24 @@ async def _handle_webhook(request: Request, settings: Settings) -> WebhookAccept
 @app.get(
     "/subjects",
     response_model=SubjectsResponse,
+    summary="List subjects",
+    description="Return the list of NATS subjects that have been published to.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "subjects": [
+                            "hi.agents.host1.agent1.registered",
+                            "hi.tasks.team1.task1.created",
+                        ],
+                        "hermes_public_url": "http://localhost:8080",
+                        "active_subjects_max": 100,
+                    }
+                }
+            }
+        },
+    },
 )
 @limiter.limit(lambda: get_settings().subjects_rate_limit)
 async def list_subjects(request: Request, settings: SettingsDep) -> SubjectsResponse:
@@ -500,13 +600,55 @@ async def list_subjects(request: Request, settings: SettingsDep) -> SubjectsResp
     )
 
 
-@app.get("/metrics")
+@app.get(
+    "/metrics",
+    summary="Prometheus metrics",
+    description="Expose Prometheus exposition-format metrics for all webhook and NATS counters.",
+    responses={
+        200: {
+            "content": {
+                "text/plain; version=0.0.4; charset=utf-8": {
+                    "example": (
+                        "# HELP hermes_webhooks_received_total Total webhooks received\n"
+                        "# TYPE hermes_webhooks_received_total counter\n"
+                        "hermes_webhooks_received_total{event_type=\"agent.registered\"} 0\n"
+                    )
+                }
+            }
+        }
+    },
+)
 async def metrics() -> Response:
     """Expose Prometheus metrics in text format."""
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
-@app.get("/dead-letters", response_model=DeadLettersResponse)
+@app.get(
+    "/dead-letters",
+    response_model=DeadLettersResponse,
+    summary="Get dead letters",
+    description="Return the in-memory dead-letter queue with optional pagination.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "total": 1,
+                        "offset": 0,
+                        "limit": 100,
+                        "items": [
+                            {
+                                "subject": "hi.agents.host1.agent1.unknown_event",
+                                "payload": {"event": "unknown_event", "data": {}},
+                                "timestamp": "2026-06-04T12:00:00Z",
+                            }
+                        ],
+                    }
+                }
+            }
+        },
+    },
+)
 async def dead_letters(
     offset: int = 0,
     limit: int | None = None,
@@ -535,7 +677,23 @@ async def dead_letters(
     return DeadLettersResponse(total=total, offset=offset, limit=effective_limit, items=sliced)
 
 
-@app.delete("/dead-letters", status_code=status.HTTP_200_OK)
+@app.delete(
+    "/dead-letters",
+    status_code=status.HTTP_200_OK,
+    summary="Drain dead letters",
+    description="Drain (clear) the in-memory dead-letter queue and return the count of drained items.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "drained": 1,
+                    }
+                }
+            }
+        },
+    },
+)
 async def drain_dead_letters(
     _: None = Depends(_require_dead_letter_key),
 ) -> dict[str, int]:
@@ -545,7 +703,24 @@ async def drain_dead_letters(
     return {"drained": drained}
 
 
-@app.get("/events")
+@app.get(
+    "/events",
+    summary="List events",
+    description="Return the canonical set of supported webhook event types.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "example": {
+                        "agent_events": ["agent.registered"],
+                        "task_events": ["task.created"],
+                        "all_events": ["agent.registered", "task.created"],
+                    }
+                }
+            }
+        },
+    },
+)
 async def list_events() -> dict[str, list[str]]:
     """Return the canonical set of supported webhook event types."""
     agent = sorted(AGENT_EVENTS)
