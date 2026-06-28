@@ -8,6 +8,14 @@ COPY pyproject.toml .
 # Extract runtime deps to a newline-delimited requirements list, then feed pip via stdin.
 # Avoids shell-quoting hazards from version specifiers like `<1` (shell redirects) or
 # bare `repr()` output (pip rejects `'fastapi>=0.115,<1'` as quoted package name).
+#
+# Note on --no-deps (see #512): this is the ONLY pip install in the build — the runtime
+# image receives /build/deps via COPY and runs `python -m hermes.server` against source
+# copied from src/hermes/, with no second `pip install .` step. Adding --no-deps here
+# would skip transitive dependencies (anyio, pydantic-core, starlette, etc.) and break
+# the image. The two-layer "deps cached + source install --no-deps" pattern requires a
+# separate package-install step that Hermes does not have; if this build is ever
+# refactored to install a wheel, revisit #512 at that point.
 RUN python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print('\n'.join(d['project']['dependencies']))" > /tmp/requirements.txt \
     && pip install --no-cache-dir --target /build/deps -r /tmp/requirements.txt
 
