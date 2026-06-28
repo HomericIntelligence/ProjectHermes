@@ -77,7 +77,7 @@ class TestPublisherIntegration:
         async def _cb(m: nats.aio.msg.Msg) -> None:
             received.append(m)
 
-        sub = await nats_client.subscribe("hi.agents.>", cb=_cb)
+        sub = await nats_client.subscribe("hi.agents.prod-host.my-agent.created", cb=_cb)
         await nats_client.flush()  # ensure server has ack'd the subscription before we publish
 
         payload = WebhookPayload(
@@ -103,7 +103,7 @@ class TestPublisherIntegration:
         async def _cb(m: nats.aio.msg.Msg) -> None:
             received.append(m)
 
-        sub = await nats_client.subscribe("hi.tasks.>", cb=_cb)
+        sub = await nats_client.subscribe("hi.tasks.team-42.t-007.updated", cb=_cb)
         await nats_client.flush()  # ensure server has ack'd the subscription before we publish
 
         payload = WebhookPayload(
@@ -169,7 +169,7 @@ class TestWebhookIntegration:
         async def _cb(m: nats.aio.msg.Msg) -> None:
             received.append(m)
 
-        sub = await nats_client.subscribe("hi.agents.>", cb=_cb)
+        sub = await nats_client.subscribe("hi.agents.e2e-host.e2e-agent.created", cb=_cb)
         await nats_client.flush()  # ensure server has ack'd the subscription before we publish
 
         # Ensure the app has a live publisher
@@ -288,7 +288,7 @@ class TestEdgeCases:
         async def _cb(m: nats.aio.msg.Msg) -> None:
             received.append(m)
 
-        sub = await nats_client.subscribe("hi.>", cb=_cb)
+        sub = await nats_client.subscribe("hi.deadletter.>", cb=_cb)
 
         pub = Publisher(enable_dead_letter=False)
         await pub.connect(nats_url)
@@ -315,7 +315,7 @@ class TestEdgeCases:
         async def _cb(m: nats.aio.msg.Msg) -> None:
             received.append(m)
 
-        sub = await nats_client.subscribe("hi.agents.>", cb=_cb)
+        sub = await nats_client.subscribe("hi.agents.concurrent-host.>", cb=_cb)
         await nats_client.flush()  # ensure server has ack'd the subscription before we publish
 
         payloads = [
@@ -1135,6 +1135,8 @@ class TestJetStreamAck:
         monkeypatch.setenv("WEBHOOK_SECRET", INTEGRATION_TEST_SECRET)
         monkeypatch.setenv("NATS_URL", nats_url)
 
+        from nats.js.api import ConsumerConfig, DeliverPolicy
+
         js = nats_client.jetstream()
 
         pub = Publisher()
@@ -1145,6 +1147,7 @@ class TestJetStreamAck:
             sub = await js.pull_subscribe(
                 "hi.agents.js-ack-host.js-ack-agent.created",
                 stream="homeric-agents",
+                config=ConsumerConfig(deliver_policy=DeliverPolicy.NEW),
             )
 
             payload = {
