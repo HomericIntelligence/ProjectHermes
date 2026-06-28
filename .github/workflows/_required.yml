@@ -258,6 +258,10 @@ jobs:
           pixi run coverage report --include="src/hermes/rate_limit.py" --fail-under=95
           pixi run coverage report --include="src/hermes/server.py" --fail-under=90
 
+      - name: Advisory — coverage floor ratchet
+        if: always()
+        run: pixi run python scripts/check_coverage_floors.py
+
       - name: Upload coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         if: always()

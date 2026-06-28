@@ -112,6 +112,10 @@ audit:
 dep-check:
     pixi run python scripts/check_dep_sync.py
 
+# Warn when measured coverage exceeds per-module floors by >15pp (advisory)
+check-coverage-floors:
+    pixi run python scripts/check_coverage_floors.py
+
 # Scan repository for leaked secrets (requires gitleaks binary)
 scan-secrets:
     #!/usr/bin/env bash
