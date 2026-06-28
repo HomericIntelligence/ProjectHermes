@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import signal
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -438,7 +438,7 @@ class TestShutdownRaceCondition:
     """Issue #440 — TOCTOU between ShutdownMiddleware and _inflight increment."""
 
     @pytest.fixture(autouse=True)
-    def _reset_shutdown_state(self) -> AsyncGenerator[None, None]:
+    def _reset_shutdown_state(self) -> Generator[None, None, None]:
         """Reset shutdown event and inflight counter around every test in this
         class so a failure mid-test does not poison sibling tests."""
         import hermes.server as srv
@@ -510,9 +510,7 @@ class TestShutdownRaceCondition:
 
     @pytest.mark.asyncio
     async def test_drain_loop_observes_increment_taken_before_signal(self) -> None:
-        """Monotonicity invariant: if the post-increment re-check sees
-        _shutdown_event unset, the drain loop's next under-lock read of
-        _inflight observes our increment (>= 1) and will not disconnect."""
+        """Invariant check (not guard coverage): validates that _inflight_context increments before the re-check fires, so drain-loop reads always observe >= 1 when the event is still unset — the underlying monotonicity guarantee the new guard at server.py:405 relies on. Direct 503 guard coverage is in test_webhook_returns_503_when_shutdown_set_after_increment."""
         import hermes.server as srv
 
         srv._shutdown_event = asyncio.Event()
