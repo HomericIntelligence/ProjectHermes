@@ -12,8 +12,6 @@ from fastapi.testclient import TestClient
 from tests.helpers import TEST_SECRET, sign_body
 
 
-
-
 def _build_client(
     *,
     connected: bool = True,

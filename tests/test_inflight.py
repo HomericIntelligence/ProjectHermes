@@ -68,7 +68,10 @@ class TestInflightIncrementDecrement:
         client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
         assert srv._inflight == 0
 
@@ -91,7 +94,10 @@ class TestInflightIncrementDecrement:
         resp = client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
 
         assert resp.status_code == 202
@@ -106,7 +112,10 @@ class TestInflightIncrementDecrement:
         resp = client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
         assert resp.status_code == 202
         assert srv._inflight == 0
@@ -158,7 +167,10 @@ class TestInflightDecrementOnErrors:
         resp = client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
         assert resp.status_code == 503
         assert srv._inflight == 0
@@ -175,7 +187,10 @@ class TestInflightDecrementOnErrors:
         resp = client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
         assert resp.status_code == 503
         assert srv._inflight == 0
@@ -193,7 +208,10 @@ class TestInflightDecrementOnErrors:
             client.post(
                 "/webhook",
                 content=body,
-                headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+                headers={
+                    "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                    "Content-Type": "application/json",
+                },
             )
         assert srv._inflight == 0
 

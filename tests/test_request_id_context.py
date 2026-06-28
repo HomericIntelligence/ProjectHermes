@@ -14,8 +14,6 @@ from fastapi.testclient import TestClient
 from tests.helpers import TEST_SECRET, sign_body
 
 
-
-
 def _build_client(*, connected: bool = True) -> TestClient:
     from hermes.config import Settings, get_settings
     from hermes.publisher import Publisher

@@ -22,9 +22,7 @@ async def hanging_tcp_server() -> AsyncGenerator[tuple[str, int], None]:
     """TCP server that accepts connections but never responds (hangs the NATS handshake)."""
     _stop = asyncio.Event()
 
-    async def _handler(
-        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         await _stop.wait()
         writer.close()
 
@@ -42,9 +40,7 @@ async def hanging_tcp_server() -> AsyncGenerator[tuple[str, int], None]:
 class TestConnectTimeoutIntegration:
     """Publisher.connect() fires a real timeout, not just a kwarg passthrough."""
 
-    async def test_connect_raises_within_timeout(
-        self, hanging_tcp_server: tuple[str, int]
-    ) -> None:
+    async def test_connect_raises_within_timeout(self, hanging_tcp_server: tuple[str, int]) -> None:
         """connect() raises within ~connect_timeout seconds against a silent TCP server."""
         host, port = hanging_tcp_server
         pub = Publisher()

@@ -231,14 +231,18 @@ class TestSubjectsRateLimit:
         s = Settings()
         assert s.subjects_rate_limit == "1000/hour"
 
-    def test_subjects_rate_limit_rejects_missing_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_subjects_rate_limit_rejects_missing_period(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("SUBJECTS_RATE_LIMIT", "100")
         from hermes.config import Settings
 
         with pytest.raises(ValidationError):
             Settings()
 
-    def test_subjects_rate_limit_rejects_invalid_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_subjects_rate_limit_rejects_invalid_period(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("SUBJECTS_RATE_LIMIT", "100/week")
         from hermes.config import Settings
 
@@ -293,6 +297,113 @@ class TestWebhookSecretProductionWarning:
             )
         warning_messages = [call.args[0] for call in mock_warn.call_args_list if call.args]
         assert any("WEBHOOK_SECRET is NOT SET" in msg for msg in warning_messages)
+
+    def test_loud_warning_when_secret_empty_and_host_fqdn(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="",
+                hermes_host="hermes.example.com",
+                _env_file=None,
+            )
+        msgs = [c.args[0] for c in mock_warn.call_args_list if c.args]
+        assert any("WEBHOOK_SECRET is NOT SET" in m for m in msgs)
+
+    def test_loud_warning_when_secret_empty_and_host_public_ip(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="",
+                hermes_host="203.0.113.10",
+                _env_file=None,
+            )
+        msgs = [c.args[0] for c in mock_warn.call_args_list if c.args]
+        assert any("WEBHOOK_SECRET is NOT SET" in m for m in msgs)
+
+    def test_loud_warning_when_secret_empty_and_public_url_set(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="",
+                hermes_host="127.0.0.1",
+                hermes_public_url="https://hermes.example.com",
+                _env_file=None,
+            )
+        msgs = [c.args[0] for c in mock_warn.call_args_list if c.args]
+        assert any("WEBHOOK_SECRET is NOT SET" in m for m in msgs)
+
+    def test_no_warning_when_public_url_is_localhost_default(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="",
+                hermes_host="127.0.0.1",
+                hermes_public_url="http://localhost:8080",
+                _env_file=None,
+            )
+        for call in mock_warn.call_args_list:
+            assert "WEBHOOK_SECRET is NOT SET" not in (call.args[0] if call.args else "")
+
+    def test_no_warning_when_host_localhost_literal(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="",
+                hermes_host="localhost",
+                _env_file=None,
+            )
+        for call in mock_warn.call_args_list:
+            assert "WEBHOOK_SECRET is NOT SET" not in (call.args[0] if call.args else "")
+
+    def test_no_warning_when_secret_set_and_host_fqdn(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="a" * 32,
+                hermes_host="hermes.example.com",
+                _env_file=None,
+            )
+        for call in mock_warn.call_args_list:
+            assert "WEBHOOK_SECRET is NOT SET" not in (call.args[0] if call.args else "")
+
+    def test_no_warning_when_host_ipv6_loopback(self) -> None:
+        from unittest.mock import patch
+
+        import hermes.config as cfg
+        from hermes.config import Settings
+
+        with patch.object(cfg._config_logger, "warning") as mock_warn:
+            Settings(
+                webhook_secret="",
+                hermes_host="::1",
+                _env_file=None,
+            )
+        for call in mock_warn.call_args_list:
+            assert "WEBHOOK_SECRET is NOT SET" not in (call.args[0] if call.args else "")
 
 
 class TestAgamemnonFieldsRemoved:

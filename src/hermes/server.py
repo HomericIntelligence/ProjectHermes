@@ -224,9 +224,7 @@ async def _http_exception_handler_with_request_id(
     # ``BaseHTTPMiddleware``'s streaming wrapper (observed in readonly-fs-smoke).
     # ``JSONResponse`` will recompute Content-Length from the new body when the
     # header is absent.
-    forwarded_headers = {
-        k: v for k, v in response.headers.items() if k.lower() != "content-length"
-    }
+    forwarded_headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
     return JSONResponse(
         status_code=exc.status_code,
         content=body,

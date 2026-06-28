@@ -166,21 +166,54 @@ class Settings(BaseSettings):
     tls_key_file: str | None = None
     tls_verify: bool = True
 
+    def _host_looks_public(self, host: str) -> bool:
+        """Return True when ``host`` is neither loopback nor the literal 'localhost'."""
+        if host == "localhost":
+            return False
+        try:
+            return not ip_address(host).is_loopback
+        except ValueError:
+            # Non-IP (FQDN) — treat as public-facing.
+            return True
+
+    def _is_production_signal(self) -> bool:
+        """Return True if HERMES_HOST or HERMES_PUBLIC_URL points at a non-loopback target.
+
+        Production is inferred when either:
+        - ``hermes_host`` is anything other than a loopback address / 'localhost'
+          (e.g. ``0.0.0.0``, a specific public IP, or a FQDN), OR
+        - ``hermes_public_url`` resolves to a host that is not loopback / 'localhost'
+          (i.e. the operator configured a real externally-reachable URL).
+        """
+        if self._host_looks_public(self.hermes_host):
+            return True
+        if self.hermes_public_url is not None:
+            from urllib.parse import urlparse
+
+            public_host = urlparse(self.hermes_public_url).hostname or ""
+            if public_host and self._host_looks_public(public_host):
+                return True
+        return False
+
     @model_validator(mode="after")
     def _warn_hmac_disabled_in_production(self) -> "Settings":
-        """Emit a loud WARNING when WEBHOOK_SECRET is unset while bound to all interfaces.
+        """Emit a loud WARNING when WEBHOOK_SECRET is unset and Hermes is production-facing.
 
-        Production is inferred when ``hermes_host`` is ``0.0.0.0`` (listening on all interfaces).
-        Without a secret, any source can POST to /webhook without authentication.
+        Production is inferred when ``hermes_host`` is non-loopback (``0.0.0.0``, a public
+        IP, or a FQDN) or when ``hermes_public_url`` is configured to a non-loopback host.
+        Without a secret, any source that can reach /webhook bypasses HMAC validation.
         """
-        if not self.webhook_secret and self.hermes_host == "0.0.0.0":
+        if not self.webhook_secret and self._is_production_signal():
             _config_logger.warning(
                 "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
-                "  WEBHOOK_SECRET is NOT SET while HERMES_HOST=0.0.0.0 (PRODUCTION)\n"
+                "  WEBHOOK_SECRET is NOT SET while Hermes appears production-facing\n"
+                "  (HERMES_HOST=%s, HERMES_PUBLIC_URL=%s).\n"
                 "  HMAC webhook signature validation is DISABLED — any source can\n"
                 "  POST to /webhook without authentication.  Set WEBHOOK_SECRET to\n"
                 "  a random string of at least 32 characters to enable validation.\n"
                 "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+                self.hermes_host,
+                self.hermes_public_url,
             )
         return self
 
