@@ -114,7 +114,7 @@ class Settings(BaseSettings):
         if not isinstance(data, dict):
             return data
         if data.get("hermes_public_url") is None:
-            port = data.get("hermes_port", 8080)
+            port = data.get("hermes_port", cls.model_fields["hermes_port"].default)
             data["hermes_public_url"] = f"http://localhost:{port}"
         return data
 
