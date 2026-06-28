@@ -181,6 +181,10 @@ matching `v*.*.*` and via manual `workflow_dispatch`. Merges to `main` do **not*
 publish. To release a new image, push a semver tag (e.g.
 `git tag v1.2.3 && git push origin v1.2.3`).
 
+Each published image carries SLSA provenance (`mode=max`) and an SPDX SBOM attestation
+(see [ADR-004](docs/adr/ADR-004-slsa-build-provenance.md)). Verify with:
+`gh attestation verify oci://ghcr.io/<org>/projecthermes:<tag> --owner <org>`
+
 Coverage uploads to Codecov are gated on the repository secret `CODECOV_TOKEN`.
 When the secret is unset the upload step is skipped and CI stays green; setting
 it on the repo (Settings → Secrets and variables → Actions) activates uploads

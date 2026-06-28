@@ -31,6 +31,8 @@ jobs:
     timeout-minutes: 20
     permissions:
       packages: write
+      id-token: write       # OIDC signing of SLSA provenance; see ADR-004
+      attestations: write   # upload attestation to GH attestation store
 
     steps:
       - name: Checkout
@@ -75,6 +77,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
 
   validate-manual-dispatch:
     name: Validate manual image_tag override
