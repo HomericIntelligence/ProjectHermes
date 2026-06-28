@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 import pytest
 import yaml
 
 COMPOSE_PATH = pathlib.Path(__file__).parent.parent / "docker-compose.yml"
 SERVICES = ["nats", "hermes"]
+
+_SUBST = re.compile(r"^\$\{[A-Z0-9_]+:-(?P<default>[^}]+)\}$")
+
+
+def _default_of(value: str) -> str:
+    """Extract the default from a Compose ``${VAR:-default}`` substitution."""
+    m = _SUBST.match(str(value))
+    assert m, f"expected ${{VAR:-default}} substitution, got: {value!r}"
+    return m.group("default")
 
 
 @pytest.fixture(scope="module")
@@ -18,34 +28,44 @@ def compose() -> dict:
 
 @pytest.mark.parametrize("service", SERVICES)
 def test_deploy_resources_limits_cpu(compose: dict, service: str) -> None:
-    """Each service must declare a CPU limit under deploy.resources.limits."""
+    """CPU limit must be an overridable substitution with a positive default."""
     limits = compose["services"][service]["deploy"]["resources"]["limits"]
     assert "cpus" in limits, f"{service}: missing cpus limit"
-    assert float(limits["cpus"]) > 0, f"{service}: cpus limit must be positive"
+    assert float(_default_of(limits["cpus"])) > 0, f"{service}: cpus default must be positive"
 
 
 @pytest.mark.parametrize("service", SERVICES)
 def test_deploy_resources_limits_memory(compose: dict, service: str) -> None:
-    """Each service must declare a memory limit under deploy.resources.limits."""
+    """Memory limit must be an overridable substitution with a non-empty default."""
     limits = compose["services"][service]["deploy"]["resources"]["limits"]
     assert "memory" in limits, f"{service}: missing memory limit"
-    assert limits["memory"], f"{service}: memory limit must be non-empty"
+    assert _default_of(limits["memory"]), f"{service}: memory default must be non-empty"
 
 
 @pytest.mark.parametrize("service", SERVICES)
 def test_deploy_resources_reservations_cpu(compose: dict, service: str) -> None:
-    """Each service must declare a CPU reservation under deploy.resources.reservations."""
+    """CPU reservation must be an overridable substitution with a positive default."""
     reservations = compose["services"][service]["deploy"]["resources"]["reservations"]
     assert "cpus" in reservations, f"{service}: missing cpus reservation"
-    assert float(reservations["cpus"]) > 0, f"{service}: cpus reservation must be positive"
+    assert float(_default_of(reservations["cpus"])) > 0, f"{service}: cpus default must be positive"
 
 
 @pytest.mark.parametrize("service", SERVICES)
 def test_deploy_resources_reservations_memory(compose: dict, service: str) -> None:
-    """Each service must declare a memory reservation under deploy.resources.reservations."""
+    """Memory reservation must be an overridable substitution with a non-empty default."""
     reservations = compose["services"][service]["deploy"]["resources"]["reservations"]
     assert "memory" in reservations, f"{service}: missing memory reservation"
-    assert reservations["memory"], f"{service}: memory reservation must be non-empty"
+    assert _default_of(reservations["memory"]), f"{service}: memory default must be non-empty"
+
+
+@pytest.mark.parametrize("service", SERVICES)
+def test_deploy_resource_defaults_preserve_prior_values(compose: dict, service: str) -> None:
+    """Substitution defaults must equal the original #348 hard-coded values."""
+    res = compose["services"][service]["deploy"]["resources"]
+    assert _default_of(res["limits"]["cpus"]) == "0.50"
+    assert _default_of(res["limits"]["memory"]) == "256M"
+    assert _default_of(res["reservations"]["cpus"]) == "0.10"
+    assert _default_of(res["reservations"]["memory"]) == "64M"
 
 
 # ---------------------------------------------------------------------------

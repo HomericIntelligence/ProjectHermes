@@ -82,6 +82,10 @@ Every message published to NATS JetStream includes a `schema_version` integer fi
 | NATS_RECONNECT_HARD_TIMEOUT | 5.0                      | Per-attempt hard timeout for external reconnect (seconds) |
 | DEAD_LETTER_API_KEY   |                                | API key for GET/DELETE /dead-letters (min 32 chars; auth bypassed when unset) |
 | SHUTDOWN_TIMEOUT      | 10.0                           | Graceful shutdown timeout in seconds                    |
+| HERMES_CPU_LIMIT      | 0.50                           | Compose-only: max CPUs per container (`deploy.resources.limits.cpus`) |
+| HERMES_MEMORY_LIMIT   | 256M                           | Compose-only: max memory per container (`deploy.resources.limits.memory`) |
+| HERMES_CPU_RESERVATION | 0.10                          | Compose-only: reserved CPUs per container               |
+| HERMES_MEMORY_RESERVATION | 64M                        | Compose-only: reserved memory per container             |
 | WEBHOOK_RATE_LIMIT    | 60/minute                      | Rate limit for POST /webhook endpoint                   |
 | WEBHOOK_RATE_LIMIT_KEY | ip                            | Rate-limit key strategy: `ip` (only currently wired) or `endpoint` (reserved) |
 | SUBJECTS_RATE_LIMIT   | 60/minute                      | Rate limit for GET /subjects endpoint                   |
