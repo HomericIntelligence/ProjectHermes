@@ -7,6 +7,8 @@ import json
 import logging
 import sys
 
+import pytest
+
 from hermes.logging_config import JsonFormatter, setup_logging
 
 
@@ -223,14 +225,10 @@ class TestSetupLoggingStream:
         logging.getLogger().warning("hello-462")
         assert "hello-462" in buf.getvalue()
 
-    def test_none_resolves_lazily(self) -> None:
+    def test_none_resolves_lazily(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Passing stream=None must resolve sys.stdout at call time, not import time."""
         self._clear_root_handlers()
         sentinel = io.StringIO()
-        original = sys.stdout
-        try:
-            sys.stdout = sentinel
-            setup_logging(stream=None)
-            assert self._stream_handler().stream is sentinel
-        finally:
-            sys.stdout = original
+        monkeypatch.setattr(sys, "stdout", sentinel)
+        setup_logging(stream=None)
+        assert self._stream_handler().stream is sentinel
