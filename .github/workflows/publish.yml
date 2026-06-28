@@ -4,6 +4,18 @@ on:
   push:
     tags: ['v*.*.*']
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: >-
+          Optional Docker image tag for manual runs (e.g. 'hotfix-v1.2.3').
+          Allowed chars: A-Z a-z 0-9 _ . - (max 128). Leave blank to use only
+          the semver tags derived from the git ref. Public — never put secrets
+          here. If the chosen tag already exists in GHCR (e.g. you pass
+          '1.2.3' on a branch previously tagged 'v1.2.3') the existing tag
+          will be overwritten; this is the intended hotfix behaviour.
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,6 +46,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build optional manual tag override
+        id: manual_tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          extra="$(.github/workflows/scripts/build-tags.sh)"
+          {
+            echo "extra<<EOF"
+            echo "$extra"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Determine image metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
@@ -42,6 +66,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            ${{ steps.manual_tag.outputs.extra }}
 
       - name: Build and push
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25  # v5
@@ -50,3 +75,60 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  validate-manual-dispatch:
+    name: Validate manual image_tag override
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+
+      - name: shellcheck the tag-builder scripts
+        run: |
+          shellcheck .github/workflows/scripts/build-tags.sh
+          shellcheck .github/workflows/scripts/test-build-tags.sh
+
+      - name: Unit-test build-tags.sh
+        run: bash .github/workflows/scripts/test-build-tags.sh
+
+      - name: Compute extra line for end-to-end step
+        id: e2e_extra
+        env:
+          IMAGE_TAG: ci-validate-489
+        run: |
+          extra="$(.github/workflows/scripts/build-tags.sh)"
+          {
+            echo "extra<<EOF"
+            echo "$extra"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: End-to-end — feed real manual-override output into metadata-action
+        id: meta_e2e
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            ${{ steps.e2e_extra.outputs.extra }}
+
+      - name: Assert end-to-end output carries the manual tag
+        env:
+          META_TAGS: ${{ steps.meta_e2e.outputs.tags }}
+        run: |
+          if ! grep -q ":ci-validate-489" <<< "$META_TAGS"; then
+            echo "::error::expected ci-validate-489 in metadata-action output, got:" >&2
+            echo "$META_TAGS" >&2
+            exit 1
+          fi
+          echo "OK: real shell function -> metadata-action -> ci-validate-489"
