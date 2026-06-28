@@ -94,6 +94,13 @@ Every message published to NATS JetStream includes a `schema_version` integer fi
 
 Configure external services to POST to `http://<hermes-host>:<HERMES_PORT>/webhook`.
 
+> **Dead-letter eviction signal (#533):** At 100% of `DEAD_LETTER_MAX_SIZE` the
+> in-memory deque evicts its oldest entry, logging a distinct WARNING and
+> incrementing `hermes_dead_letter_evictions_total`. The durable JetStream copy
+> is unaffected (no data loss).
+
+<!-- -->
+
 > **Security warning:** Setting `TLS_VERIFY=false` disables TLS certificate verification and MUST
 > NOT be used in production.  When `TLS_VERIFY=false` is combined with `HERMES_HOST=0.0.0.0`
 > (production binding), Hermes logs a loud `WARNING` at startup.  Always use a valid CA bundle

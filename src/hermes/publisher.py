@@ -18,6 +18,7 @@ from nats.js import JetStreamContext
 
 from hermes.metrics import (
     ACTIVE_SUBJECTS,
+    DEAD_LETTER_EVICTIONS,
     DEAD_LETTER_QUEUE_ALERTS,
     DEAD_LETTER_QUEUE_DEPTH,
     DEAD_LETTERS,
@@ -386,12 +387,22 @@ class Publisher:
             if self._enable_dead_letter:
                 dead_subject = f"{_DEAD_LETTER_SUBJECT_PREFIX}.{_slug(payload.event)}"
                 await self._js.publish(dead_subject, message, timeout=publish_timeout)
+                # Capture fullness BEFORE append: deque(maxlen=N) never exceeds
+                # N, so a post-append len() cannot reveal an eviction (#533).
+                capacity = self._dead_letters.maxlen or 0
+                was_full = capacity > 0 and len(self._dead_letters) == capacity
                 self._dead_letters.append({"event": payload.event, "subject": dead_subject})
                 DEAD_LETTERS.labels(event_type=payload.event).inc()
                 self._track_subject(dead_subject)
+                if was_full:
+                    DEAD_LETTER_EVICTIONS.inc()
+                    logger.warning(
+                        "dead-letter in-memory queue full (max=%d); oldest inspection "
+                        "entry evicted (durable copy retained in JetStream)",
+                        capacity,
+                    )
                 depth = len(self._dead_letters)
                 DEAD_LETTER_QUEUE_DEPTH.set(depth)
-                capacity = self._dead_letters.maxlen or 0
                 if capacity > 0 and depth >= self._dead_letter_alert_threshold * capacity:
                     logger.warning(
                         "Dead-letter queue depth %d/%d exceeds %.0f%% threshold",

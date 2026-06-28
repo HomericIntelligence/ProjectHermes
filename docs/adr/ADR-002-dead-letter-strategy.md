@@ -68,6 +68,13 @@ receives `422 Unprocessable Entity`.
 - Callers always receive `200 OK` for unknown events when dead-lettering is enabled, which is the
   correct HTTP contract (the payload was received and processed — routing it to dead-letter *is*
   the processing).
+- **In-memory eviction is now signalled (#533, 2026-06-20):** When the in-memory
+  deque reaches `DEAD_LETTER_MAX_SIZE`, each eviction of the oldest *inspection*
+  entry logs a distinct WARNING ("dead-letter in-memory queue full ... oldest inspection
+  entry evicted") and increments `hermes_dead_letter_evictions_total`. The durable
+  JetStream copy is published before the deque append, so no event data is lost —
+  only the in-memory `/dead-letters` view rolls over. This eviction signal is separate
+  from the 80% `DEAD_LETTER_ALERT_THRESHOLD` pressure alert.
 
 ---
 
