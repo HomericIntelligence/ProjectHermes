@@ -16,7 +16,7 @@ from pathlib import Path
 try:
     import tomllib
 except ModuleNotFoundError:  # py<3.11
-    import tomli as tomllib  # type: ignore[no-redef]
+    import tomli as tomllib  # type: ignore[import-not-found,no-redef,unused-ignore]
 
 REPO_ROOT = Path(__file__).parent.parent
 REQUIREMENTS_FILE = REPO_ROOT / "requirements.txt"
