@@ -76,6 +76,10 @@ def test_dockerfile_no_bare_unversioned_pip_packages() -> None:
     # and is NOT using tomllib (i.e. a hardcoded bare name).
     # We check that every pip install invocation either uses tomllib or only versioned specs.
     for line in text.splitlines():
+        # Skip comment lines: prose may mention "pip install" without being an
+        # actual install invocation (e.g. the --no-deps explanatory note).
+        if line.lstrip().startswith("#"):
+            continue
         if not _PIP_INSTALL_RE.search(line):
             continue
         # If the line uses tomllib substitution, it's acceptable — deps come from pyproject.toml
