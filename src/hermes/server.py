@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Shutdown state — module-level so tests can inspect/mutate directly
 # ---------------------------------------------------------------------------
-# NOTE: ``_shutdown_event`` is rebound in ``lifespan`` (line ~148) to a fresh
+# NOTE: ``_shutdown_event`` is rebound in ``lifespan`` (line ~153) to a fresh
 # ``asyncio.Event`` bound to the running loop. ``ShutdownMiddleware.dispatch``
 # reads this name as a module global on every request, so the rebind is picked
 # up automatically. Any future move of this state onto ``app.state`` must
@@ -306,7 +306,7 @@ class ShutdownMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
         # ``_shutdown_event`` is resolved as a module global on every call, not
         # captured at class-definition time. ``lifespan`` rebinds the module
         # attribute to a fresh ``asyncio.Event`` bound to the running loop
-        # (see ``hermes.server`` ~line 148); reading it here picks up that
+        # (see ``hermes.server`` ~line 153); reading it here picks up that
         # rebind automatically. If this state is ever moved to ``app.state``
         # (issue #459), switch to ``request.app.state.shutdown_event`` and
         # update ``_on_shutdown_signal`` and ``health`` to match.
