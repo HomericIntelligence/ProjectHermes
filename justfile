@@ -126,6 +126,10 @@ scan-secrets:
     fi
     gitleaks detect --source . --config .gitleaks.toml --verbose
 
+# End-to-end verification that Gitleaks blocks a real-looking secret. See docs/security.md.
+verify-secret-scan:
+    bash scripts/verify-secret-scan.sh
+
 # === NATS ===
 
 # Start NATS server (uses Odysseus config if available, otherwise embedded defaults)
