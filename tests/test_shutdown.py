@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import signal
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -406,3 +408,124 @@ class TestInflightCounter:
         client = _build_client()
         body = client.get("/health").json()
         assert body["inflight_requests"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Shutdown TOCTOU race (issue #440)
+# ---------------------------------------------------------------------------
+
+
+@contextlib.asynccontextmanager
+async def _race_inflight_context() -> AsyncGenerator[None, None]:
+    """Test double for _inflight_context that simulates a signal arriving
+    between the increment and the handler body — sets _shutdown_event after
+    incrementing _inflight, then yields."""
+    import hermes.server as srv
+
+    async with srv._inflight_lock:
+        srv._inflight += 1
+    srv._shutdown_event.set()  # race: signal lands after increment, before re-check
+    try:
+        yield
+    finally:
+        async with srv._inflight_lock:
+            srv._inflight -= 1
+
+
+class TestShutdownRaceCondition:
+    """Issue #440 — TOCTOU between ShutdownMiddleware and _inflight increment."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_shutdown_state(self) -> Generator[None, None, None]:
+        """Reset shutdown event and inflight counter around every test in this
+        class so a failure mid-test does not poison sibling tests."""
+        import hermes.server as srv
+
+        original_event = srv._shutdown_event
+        original_inflight = srv._inflight
+        srv._shutdown_event = asyncio.Event()
+        srv._inflight = 0
+        try:
+            yield
+        finally:
+            srv._shutdown_event = original_event
+            srv._inflight = original_inflight
+
+    def test_webhook_returns_503_when_shutdown_set_after_increment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If shutdown is signalled between the middleware check and the
+        handler's _inflight increment, the handler's post-increment re-check
+        must return 503 without calling publisher.publish, and _inflight must
+        decrement back to 0 via the context manager's finally."""
+        import hermes.server as srv
+        from hermes.config import Settings, get_settings
+        from hermes.server import app
+
+        # Disable HMAC validation; Settings is frozen, so override the dependency
+        # rather than mutating the model in place.
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret="")
+        monkeypatch.setattr(srv, "_inflight_context", _race_inflight_context)
+
+        mock_pub = _make_mock_publisher()
+        client = _build_client(mock_pub)
+
+        response = client.post(
+            "/webhook",
+            json={
+                "event": "agent.created",
+                "data": {"host": "h", "name": "n"},
+                "timestamp": "2026-04-22T00:00:00Z",
+            },
+        )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Service is shutting down"
+        mock_pub.publish.assert_not_awaited()
+        assert srv._inflight == 0
+        assert srv._shutdown_event.is_set()
+
+    def test_webhook_proceeds_when_shutdown_never_signalled(self) -> None:
+        """Sanity check: with shutdown unset, the handler succeeds end-to-end
+        and the new post-increment guard does not regress the happy path."""
+        import hermes.server as srv
+        from hermes.config import Settings, get_settings
+        from hermes.server import app
+
+        # Disable HMAC validation; Settings is frozen, so override the dependency
+        # rather than mutating the model in place.
+        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret="")
+        mock_pub = _make_mock_publisher()
+        client = _build_client(mock_pub)
+
+        response = client.post(
+            "/webhook",
+            json={
+                "event": "agent.created",
+                "data": {"host": "h", "name": "n"},
+                "timestamp": "2026-04-22T00:00:00Z",
+            },
+        )
+
+        assert response.status_code == 202
+        mock_pub.publish.assert_awaited_once()
+        assert srv._inflight == 0
+        assert not srv._shutdown_event.is_set()
+
+    @pytest.mark.asyncio
+    async def test_drain_loop_observes_increment_taken_before_signal(self) -> None:
+        """Invariant check (not guard coverage): validates that _inflight_context increments before the re-check fires, so drain-loop reads always observe >= 1 when the event is still unset — the underlying monotonicity guarantee the new guard at server.py:405 relies on. Direct 503 guard coverage is in test_webhook_returns_503_when_shutdown_set_after_increment."""
+        import hermes.server as srv
+
+        srv._shutdown_event = asyncio.Event()
+        srv._inflight = 0
+
+        async with srv._inflight_context():
+            # Re-check inside the body — event is unset, so we proceed.
+            assert not srv._shutdown_event.is_set()
+            # The drain loop's read pattern under the same lock:
+            async with srv._inflight_lock:
+                observed = srv._inflight
+            assert observed >= 1  # drain loop would NOT take the disconnect branch
+        async with srv._inflight_lock:
+            assert srv._inflight == 0

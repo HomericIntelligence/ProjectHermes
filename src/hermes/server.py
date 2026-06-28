@@ -417,6 +417,17 @@ async def _handle_webhook(request: Request, settings: Settings) -> WebhookAccept
     request_id: str = request.state.request_id
 
     async with _inflight_context():
+        # Issue #440: close TOCTOU between ShutdownMiddleware and _inflight increment.
+        if _shutdown_event.is_set():
+            logger.warning(
+                "Webhook rejected post-increment: shutdown signalled between middleware and handler",
+                extra={"request_id": request_id},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Service is shutting down",
+            )
+
         # HMAC validation (skipped when no secret is configured)
         if settings.webhook_secret:
             _verify_signature(raw_body, request.headers.get("X-Webhook-Signature", ""), settings)
