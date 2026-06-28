@@ -132,6 +132,21 @@ and writes to `sys.stdout` by default, matching the pre-#328
 log collectors depend on. Callers that need stderr can pass
 `stream=sys.stderr` explicitly. See issue #462.
 
+## Test conventions
+
+- **HMAC signing in tests:** never `import hmac` or `import hashlib` inside
+  a test module. Import the canonical helpers from `tests/helpers.py`:
+
+  ```python
+  from tests.helpers import TEST_SECRET, sign_body
+  ```
+
+  This is enforced by `scripts/check-no-bare-crypto-in-tests.py`, wired
+  into pre-commit (`no-bare-crypto-in-tests`) and enforced in CI via the
+  `pre-commit run --all-files` step in `_required.yml`. The only file
+  permitted to import `hmac`/`hashlib` is
+  `tests/helpers.py` itself. Regression guard for #468 / follow-up #329.
+
 ## Future Integrations
 
 ### Agamemnon (deferred — fields removed per #324)
