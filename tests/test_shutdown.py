@@ -232,7 +232,6 @@ class TestLifespanShutdown:
         # Simulate one in-flight request that resolves quickly
         srv._shutdown_event = asyncio.Event()
         srv._inflight = 1
-        app.state.inflight_lock = asyncio.Lock()
 
         async def _clear_inflight_soon() -> None:
             await asyncio.sleep(0.2)
@@ -280,7 +279,6 @@ class TestLifespanShutdown:
 
         srv._shutdown_event = asyncio.Event()
         srv._inflight = 5  # stuck requests
-        app.state.inflight_lock = asyncio.Lock()
 
         disconnect_called = False
 
