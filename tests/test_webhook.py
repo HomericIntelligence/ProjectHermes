@@ -234,6 +234,32 @@ class TestHealthEndpoint:
         assert body["consecutive_reconnect_failures"] == 4
         assert body["nats_reconnect_loop_active"] is True
 
+    def test_health_reports_dead_letter_api_key_configured_when_set(self) -> None:
+        from unittest.mock import patch
+        from hermes.config import Settings
+
+        client = _build_client()
+        test_settings = Settings(
+            webhook_secret=TEST_SECRET,
+            dead_letter_api_key="k" * 32,
+        )
+        with patch("hermes.server.get_settings", return_value=test_settings):
+            body = client.get("/health").json()
+        assert body["dead_letter_api_key_configured"] is True
+
+    def test_health_reports_dead_letter_api_key_not_configured_when_unset(self) -> None:
+        from unittest.mock import patch
+        from hermes.config import Settings
+
+        client = _build_client()
+        test_settings = Settings(
+            webhook_secret=TEST_SECRET,
+            dead_letter_api_key="",
+        )
+        with patch("hermes.server.get_settings", return_value=test_settings):
+            body = client.get("/health").json()
+        assert body["dead_letter_api_key_configured"] is False
+
 
 class TestReadyEndpoint:
     def test_ready_returns_200_when_connected(self) -> None:

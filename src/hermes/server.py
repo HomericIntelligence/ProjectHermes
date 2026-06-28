@@ -345,6 +345,7 @@ async def health(response: Response) -> HealthResponse:
         nats_connected=connected,
         shutting_down=_shutdown_event.is_set(),
         hmac_validation_enabled=bool(cfg.webhook_secret),
+        dead_letter_api_key_configured=bool(cfg.dead_letter_api_key),
         hermes_public_url=cfg.hermes_public_url,
         inflight_requests=_inflight,
         dead_letter_count=dl_depth,
@@ -561,12 +562,17 @@ def _log_startup_banner(publisher: Publisher, settings: Settings | None = None) 
         settings.hermes_public_url,
     )
     logger.info(
-        "secrets webhook_secret=%s",
+        "secrets webhook_secret=%s dead_letter_api_key=%s",
         _mask_secret(settings.webhook_secret),
+        _mask_secret(settings.dead_letter_api_key),
     )
     logger.info(
         "hmac_validation=%s",
         "enabled" if settings.webhook_secret else "disabled",
+    )
+    logger.info(
+        "dead_letter_auth=%s",
+        "enabled" if settings.dead_letter_api_key else "disabled",
     )
     logger.info(
         "nats connected=%s streams=%s",

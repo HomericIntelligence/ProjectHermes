@@ -139,6 +139,56 @@ class TestLogStartupBanner:
         all_info_args = [str(c) for c in mock_logger.info.call_args_list]
         assert any("disabled" in a for a in all_info_args)
 
+    def test_banner_masks_dead_letter_api_key(self) -> None:
+        from hermes.server import _log_startup_banner
+        from hermes.config import Settings
+
+        key = "wxyz1234" + "k" * 24  # >= 32 chars to pass validation
+        settings = Settings(dead_letter_api_key=key)
+        publisher = self._make_publisher()
+        with patch("hermes.server.logger") as mock_logger:
+            _log_startup_banner(publisher, settings)
+
+        all_info_args = [str(c) for c in mock_logger.info.call_args_list]
+        assert any("wxyz****" in a for a in all_info_args)
+        assert not any(key in a for a in all_info_args)
+
+    def test_banner_shows_not_set_for_empty_dead_letter_api_key(self) -> None:
+        from hermes.server import _log_startup_banner
+        from hermes.config import Settings
+
+        settings = Settings(dead_letter_api_key="")
+        publisher = self._make_publisher()
+        with patch("hermes.server.logger") as mock_logger:
+            _log_startup_banner(publisher, settings)
+
+        all_info_args = [str(c) for c in mock_logger.info.call_args_list]
+        assert any("(not set)" in a for a in all_info_args)
+
+    def test_banner_shows_dead_letter_auth_enabled(self) -> None:
+        from hermes.server import _log_startup_banner
+        from hermes.config import Settings
+
+        settings = Settings(dead_letter_api_key="k" * 32)
+        publisher = self._make_publisher()
+        with patch("hermes.server.logger") as mock_logger:
+            _log_startup_banner(publisher, settings)
+
+        all_info_args = [str(c) for c in mock_logger.info.call_args_list]
+        assert any("dead_letter_auth" in a and "enabled" in a for a in all_info_args)
+
+    def test_banner_shows_dead_letter_auth_disabled(self) -> None:
+        from hermes.server import _log_startup_banner
+        from hermes.config import Settings
+
+        settings = Settings(dead_letter_api_key="")
+        publisher = self._make_publisher()
+        with patch("hermes.server.logger") as mock_logger:
+            _log_startup_banner(publisher, settings)
+
+        all_info_args = [str(c) for c in mock_logger.info.call_args_list]
+        assert any("dead_letter_auth" in a and "disabled" in a for a in all_info_args)
+
     def test_banner_logs_nats_connected_true(self) -> None:
         from hermes.server import _log_startup_banner
 
