@@ -490,6 +490,11 @@
             "title": "Hmac Validation Enabled",
             "default": false
           },
+          "dead_letter_api_key_configured": {
+            "type": "boolean",
+            "title": "Dead Letter Api Key Configured",
+            "default": false
+          },
           "hermes_public_url": {
             "anyOf": [
               {
