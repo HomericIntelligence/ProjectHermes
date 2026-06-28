@@ -36,14 +36,16 @@ def _make_mock_publisher(*, connected: bool = True) -> MagicMock:
 
 
 def _build_client(publisher: MagicMock | None = None) -> TestClient:
-    from hermes.config import get_settings
+    from hermes.config import Settings, get_settings
     from hermes.rate_limit import limiter
     from hermes.server import app
 
     if publisher is None:
         publisher = _make_mock_publisher()
     app.state.publisher = publisher
-    get_settings().webhook_secret = TEST_SECRET
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        webhook_secret=TEST_SECRET, _env_file=None
+    )
     limiter._storage.reset()  # type: ignore[attr-defined]
     return TestClient(app, raise_server_exceptions=True)
 
@@ -68,7 +70,10 @@ class TestInflightIncrementDecrement:
         client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
         assert srv._inflight == 0
 
@@ -91,7 +96,10 @@ class TestInflightIncrementDecrement:
         resp = client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
 
         assert resp.status_code == 202
@@ -106,7 +114,10 @@ class TestInflightIncrementDecrement:
         resp = client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
         assert resp.status_code == 202
         assert srv._inflight == 0
@@ -158,7 +169,10 @@ class TestInflightDecrementOnErrors:
         resp = client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
         assert resp.status_code == 503
         assert srv._inflight == 0
@@ -175,7 +189,10 @@ class TestInflightDecrementOnErrors:
         resp = client.post(
             "/webhook",
             content=body,
-            headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+            headers={
+                "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                "Content-Type": "application/json",
+            },
         )
         assert resp.status_code == 503
         assert srv._inflight == 0
@@ -193,7 +210,10 @@ class TestInflightDecrementOnErrors:
             client.post(
                 "/webhook",
                 content=body,
-                headers={"X-Webhook-Signature": sign_body(body, TEST_SECRET), "Content-Type": "application/json"},
+                headers={
+                    "X-Webhook-Signature": sign_body(body, TEST_SECRET),
+                    "Content-Type": "application/json",
+                },
             )
         assert srv._inflight == 0
 

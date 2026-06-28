@@ -45,7 +45,13 @@ def pytest_configure(config: pytest.Config) -> None:
 
 @pytest.fixture(autouse=True)
 def reset_settings() -> Generator[None, None, None]:
-    """Clear the get_settings LRU cache and dependency overrides before/after each test."""
+    """Clear the get_settings LRU cache and dependency overrides before/after each test.
+
+    Settings is ``frozen=True`` (see ``hermes.config.Settings.model_config``), so
+    direct field mutation raises ``ValidationError``. Tests must override config via
+    ``app.dependency_overrides[get_settings] = ...`` or by setting env vars and
+    constructing a fresh ``Settings()``.
+    """
     from hermes.server import app
 
     get_settings.cache_clear()

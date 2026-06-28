@@ -67,13 +67,12 @@ class TestDeadLetterConfigDefaults:
 class TestPublisherDequeSize:
     """Deque capacity is driven by dead_letter_max_size config."""
 
-    def test_deque_maxlen_reflects_config(self) -> None:
+    def test_deque_maxlen_reflects_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from hermes.config import get_settings
         from hermes.publisher import Publisher
 
+        monkeypatch.setenv("DEAD_LETTER_MAX_SIZE", "42")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_max_size = 42
         pub = Publisher()
         assert pub._dead_letters.maxlen == 42
 
@@ -127,7 +126,9 @@ class TestDeadLetterAlertCounter:
     """DEAD_LETTER_QUEUE_ALERTS counter increments when threshold is crossed."""
 
     @pytest.mark.asyncio
-    async def test_alert_counter_increments_at_threshold(self) -> None:
+    async def test_alert_counter_increments_at_threshold(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from datetime import datetime, timezone
 
         from hermes.config import get_settings
@@ -136,10 +137,9 @@ class TestDeadLetterAlertCounter:
         from hermes.publisher import Publisher
 
         # Use a small queue so we hit the threshold quickly.
+        monkeypatch.setenv("DEAD_LETTER_MAX_SIZE", "5")
+        monkeypatch.setenv("DEAD_LETTER_ALERT_THRESHOLD", "0.8")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_max_size = 5
-        s.dead_letter_alert_threshold = 0.8  # trigger at 4/5
 
         before = DEAD_LETTER_QUEUE_ALERTS._value.get()
 
@@ -162,7 +162,7 @@ class TestDeadLetterAlertCounter:
         assert after > before
 
     @pytest.mark.asyncio
-    async def test_no_alert_below_threshold(self) -> None:
+    async def test_no_alert_below_threshold(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from datetime import datetime, timezone
 
         from hermes.config import get_settings
@@ -170,10 +170,9 @@ class TestDeadLetterAlertCounter:
         from hermes.models import WebhookPayload
         from hermes.publisher import Publisher
 
+        monkeypatch.setenv("DEAD_LETTER_MAX_SIZE", "100")
+        monkeypatch.setenv("DEAD_LETTER_ALERT_THRESHOLD", "0.8")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_max_size = 100
-        s.dead_letter_alert_threshold = 0.8  # trigger at 80/100
 
         before = DEAD_LETTER_QUEUE_ALERTS._value.get()
 
@@ -201,15 +200,14 @@ class TestEnsureStreamsDeadLetterTTL:
     """_ensure_streams passes max_age to the homeric-deadletter stream when TTL is set."""
 
     @pytest.mark.asyncio
-    async def test_max_age_passed_when_ttl_nonzero(self) -> None:
+    async def test_max_age_passed_when_ttl_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from nats.js.errors import NotFoundError
 
         from hermes.config import get_settings
         from hermes.publisher import Publisher
 
+        monkeypatch.setenv("DEAD_LETTER_TTL_SECONDS", "3600")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_ttl_seconds = 3600
 
         pub = Publisher()
         mock_nc = MagicMock()
@@ -227,15 +225,14 @@ class TestEnsureStreamsDeadLetterTTL:
         assert cfg.max_age == timedelta(seconds=3600).total_seconds()
 
     @pytest.mark.asyncio
-    async def test_no_max_age_when_ttl_is_zero(self) -> None:
+    async def test_no_max_age_when_ttl_is_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from nats.js.errors import NotFoundError
 
         from hermes.config import get_settings
         from hermes.publisher import Publisher
 
+        monkeypatch.setenv("DEAD_LETTER_TTL_SECONDS", "0")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_ttl_seconds = 0
 
         pub = Publisher()
         mock_nc = MagicMock()
@@ -262,13 +259,14 @@ class TestEnsureStreamsDeadLetterTTLMigration:
     """_ensure_streams calls update_stream when the existing TTL differs (#530)."""
 
     @pytest.mark.asyncio
-    async def test_update_called_when_existing_max_age_differs(self) -> None:
+    async def test_update_called_when_existing_max_age_differs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from hermes.config import get_settings
         from hermes.publisher import Publisher
 
+        monkeypatch.setenv("DEAD_LETTER_TTL_SECONDS", "3600")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_ttl_seconds = 3600
 
         pub = Publisher()
         mock_nc = MagicMock()
@@ -302,13 +300,14 @@ class TestEnsureStreamsDeadLetterTTLMigration:
         assert cfg.max_age == timedelta(seconds=3600).total_seconds()
 
     @pytest.mark.asyncio
-    async def test_update_skipped_when_existing_max_age_matches(self) -> None:
+    async def test_update_skipped_when_existing_max_age_matches(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from hermes.config import get_settings
         from hermes.publisher import Publisher
 
+        monkeypatch.setenv("DEAD_LETTER_TTL_SECONDS", "3600")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_ttl_seconds = 3600
 
         pub = Publisher()
         mock_nc = MagicMock()
@@ -346,12 +345,13 @@ class TestEnsureStreamsDeadLetterTTLMigration:
 class TestDeadLettersDefaultLimit:
     """GET /dead-letters applies the configured default page size when limit is omitted."""
 
-    def test_default_limit_applied_when_no_limit_param(self) -> None:
+    def test_default_limit_applied_when_no_limit_param(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         from hermes.config import get_settings
 
+        monkeypatch.setenv("DEAD_LETTER_PAGE_SIZE_DEFAULT", "3")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_page_size_default = 3
 
         items = [{"event": f"evt.{i}", "subject": f"hi.deadletter.evt-{i}"} for i in range(10)]
         client = _build_client(items)
@@ -360,13 +360,12 @@ class TestDeadLettersDefaultLimit:
         assert body["limit"] == 3
         assert body["total"] == 10
 
-    def test_explicit_limit_overrides_default(self) -> None:
+    def test_explicit_limit_overrides_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from hermes.config import get_settings
 
+        monkeypatch.setenv("DEAD_LETTER_PAGE_SIZE_DEFAULT", "3")
+        monkeypatch.setenv("DEAD_LETTER_PAGE_SIZE_MAX", "500")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_page_size_default = 3
-        s.dead_letter_page_size_max = 500
 
         items = [{"event": f"evt.{i}", "subject": f"hi.deadletter.evt-{i}"} for i in range(10)]
         client = _build_client(items)
@@ -378,47 +377,43 @@ class TestDeadLettersDefaultLimit:
 class TestDeadLettersMaxLimitEnforcement:
     """GET /dead-letters returns HTTP 400 when limit exceeds the configured maximum."""
 
-    def test_limit_exceeding_max_returns_400(self) -> None:
+    def test_limit_exceeding_max_returns_400(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from hermes.config import get_settings
 
+        monkeypatch.setenv("DEAD_LETTER_PAGE_SIZE_MAX", "50")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_page_size_max = 50
 
         client = _build_client([])
         resp = client.get("/dead-letters?limit=51")
         assert resp.status_code == 400
 
-    def test_limit_at_max_is_accepted(self) -> None:
+    def test_limit_at_max_is_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from hermes.config import get_settings
 
+        monkeypatch.setenv("DEAD_LETTER_PAGE_SIZE_MAX", "50")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_page_size_max = 50
 
         items = [{"event": f"evt.{i}", "subject": f"hi.deadletter.evt-{i}"} for i in range(10)]
         client = _build_client(items)
         resp = client.get("/dead-letters?limit=50")
         assert resp.status_code == 200
 
-    def test_default_limit_within_max_is_accepted(self) -> None:
+    def test_default_limit_within_max_is_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from hermes.config import get_settings
 
+        monkeypatch.setenv("DEAD_LETTER_PAGE_SIZE_DEFAULT", "100")
+        monkeypatch.setenv("DEAD_LETTER_PAGE_SIZE_MAX", "500")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_page_size_default = 100
-        s.dead_letter_page_size_max = 500
 
         client = _build_client([])
         resp = client.get("/dead-letters")
         assert resp.status_code == 200
 
-    def test_error_detail_mentions_max(self) -> None:
+    def test_error_detail_mentions_max(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from hermes.config import get_settings
 
+        monkeypatch.setenv("DEAD_LETTER_PAGE_SIZE_MAX", "50")
         get_settings.cache_clear()
-        s = get_settings()
-        s.dead_letter_page_size_max = 50
 
         client = _build_client([])
         body = client.get("/dead-letters?limit=999").json()

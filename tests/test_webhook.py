@@ -12,8 +12,6 @@ from fastapi.testclient import TestClient
 from tests.helpers import TEST_SECRET, sign_body
 
 
-
-
 def _build_client(
     *,
     connected: bool = True,
@@ -900,10 +898,13 @@ _DEAD_LETTER_KEY = "dead-letter-api-key-for-testing-xxxxx"
 class TestDeadLettersGetAuth:
     """Tests for GET /dead-letters API key authentication (issue #344)."""
 
-    def _build_client(self, *, key: str) -> TestClient:
+    def _build_client(self, *, key: str, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         from hermes.config import get_settings
         from hermes.publisher import Publisher
         from hermes.server import app
+
+        monkeypatch.setenv("DEAD_LETTER_API_KEY", key)
+        get_settings.cache_clear()
 
         mock_publisher = MagicMock(spec=Publisher)
         mock_publisher.is_connected = True
@@ -911,36 +912,30 @@ class TestDeadLettersGetAuth:
         mock_publisher.publish = AsyncMock()
         mock_publisher.dead_letters = []
         app.state.publisher = mock_publisher
-        get_settings().dead_letter_api_key = key
         return TestClient(app, raise_server_exceptions=True)
 
-    def teardown_method(self) -> None:
-        from hermes.config import get_settings
-
-        get_settings().dead_letter_api_key = ""
-
-    def test_correct_key_returns_200(self) -> None:
-        client = self._build_client(key=_DEAD_LETTER_KEY)
+    def test_correct_key_returns_200(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY, monkeypatch=monkeypatch)
         resp = client.get("/dead-letters", headers={"X-Dead-Letter-Key": _DEAD_LETTER_KEY})
         assert resp.status_code == 200
 
-    def test_wrong_key_returns_401(self) -> None:
-        client = self._build_client(key=_DEAD_LETTER_KEY)
+    def test_wrong_key_returns_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY, monkeypatch=monkeypatch)
         resp = client.get("/dead-letters", headers={"X-Dead-Letter-Key": "wrong-key"})
         assert resp.status_code == 401
 
-    def test_missing_key_returns_401(self) -> None:
-        client = self._build_client(key=_DEAD_LETTER_KEY)
+    def test_missing_key_returns_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY, monkeypatch=monkeypatch)
         resp = client.get("/dead-letters")
         assert resp.status_code == 401
 
-    def test_no_key_configured_bypasses_auth(self) -> None:
-        client = self._build_client(key="")
+    def test_no_key_configured_bypasses_auth(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key="", monkeypatch=monkeypatch)
         resp = client.get("/dead-letters")
         assert resp.status_code == 200
 
-    def test_401_has_www_authenticate_header(self) -> None:
-        client = self._build_client(key=_DEAD_LETTER_KEY)
+    def test_401_has_www_authenticate_header(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY, monkeypatch=monkeypatch)
         resp = client.get("/dead-letters")
         assert resp.status_code == 401
         assert "WWW-Authenticate" in resp.headers
@@ -949,10 +944,13 @@ class TestDeadLettersGetAuth:
 class TestDeadLettersDeleteAuth:
     """Tests for DELETE /dead-letters API key authentication (issue #344)."""
 
-    def _build_client(self, *, key: str) -> TestClient:
+    def _build_client(self, *, key: str, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         from hermes.config import get_settings
         from hermes.publisher import Publisher
         from hermes.server import app
+
+        monkeypatch.setenv("DEAD_LETTER_API_KEY", key)
+        get_settings.cache_clear()
 
         mock_publisher = MagicMock(spec=Publisher)
         mock_publisher.is_connected = True
@@ -960,36 +958,30 @@ class TestDeadLettersDeleteAuth:
         mock_publisher.publish = AsyncMock()
         mock_publisher.drain_dead_letters = MagicMock(return_value=0)
         app.state.publisher = mock_publisher
-        get_settings().dead_letter_api_key = key
         return TestClient(app, raise_server_exceptions=True)
 
-    def teardown_method(self) -> None:
-        from hermes.config import get_settings
-
-        get_settings().dead_letter_api_key = ""
-
-    def test_correct_key_returns_200(self) -> None:
-        client = self._build_client(key=_DEAD_LETTER_KEY)
+    def test_correct_key_returns_200(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY, monkeypatch=monkeypatch)
         resp = client.delete("/dead-letters", headers={"X-Dead-Letter-Key": _DEAD_LETTER_KEY})
         assert resp.status_code == 200
 
-    def test_wrong_key_returns_401(self) -> None:
-        client = self._build_client(key=_DEAD_LETTER_KEY)
+    def test_wrong_key_returns_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY, monkeypatch=monkeypatch)
         resp = client.delete("/dead-letters", headers={"X-Dead-Letter-Key": "wrong-key"})
         assert resp.status_code == 401
 
-    def test_missing_key_returns_401(self) -> None:
-        client = self._build_client(key=_DEAD_LETTER_KEY)
+    def test_missing_key_returns_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY, monkeypatch=monkeypatch)
         resp = client.delete("/dead-letters")
         assert resp.status_code == 401
 
-    def test_no_key_configured_bypasses_auth(self) -> None:
-        client = self._build_client(key="")
+    def test_no_key_configured_bypasses_auth(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key="", monkeypatch=monkeypatch)
         resp = client.delete("/dead-letters")
         assert resp.status_code == 200
 
-    def test_401_has_www_authenticate_header(self) -> None:
-        client = self._build_client(key=_DEAD_LETTER_KEY)
+    def test_401_has_www_authenticate_header(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = self._build_client(key=_DEAD_LETTER_KEY, monkeypatch=monkeypatch)
         resp = client.delete("/dead-letters")
         assert resp.status_code == 401
         assert "WWW-Authenticate" in resp.headers

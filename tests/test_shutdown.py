@@ -354,12 +354,15 @@ class TestInflightCounter:
         async with srv._inflight_lock:
             assert srv._inflight == 0
 
-    def test_webhook_post_resets_inflight_to_zero_after_success(self) -> None:
+    def test_webhook_post_resets_inflight_to_zero_after_success(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """After a successful webhook POST, _inflight returns to 0."""
         import hermes.server as srv
         from hermes.config import get_settings
 
-        get_settings().webhook_secret = ""
+        monkeypatch.setenv("WEBHOOK_SECRET", "")
+        get_settings.cache_clear()
         client = _build_client()
         assert srv._inflight == 0
         response = client.post(
@@ -373,12 +376,15 @@ class TestInflightCounter:
         assert response.status_code == 202
         assert srv._inflight == 0
 
-    def test_webhook_post_resets_inflight_to_zero_on_publish_failure(self) -> None:
+    def test_webhook_post_resets_inflight_to_zero_on_publish_failure(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """After a failed publish, _inflight returns to 0."""
         import hermes.server as srv
         from hermes.config import get_settings
 
-        get_settings().webhook_secret = ""
+        monkeypatch.setenv("WEBHOOK_SECRET", "")
+        get_settings.cache_clear()
         mock_pub = _make_mock_publisher()
         mock_pub.publish = AsyncMock(side_effect=asyncio.TimeoutError())
         client = _build_client(mock_pub)

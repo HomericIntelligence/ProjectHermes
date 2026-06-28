@@ -26,3 +26,4 @@ build/
 .coverage
 coverage.xml
 htmlcov/
+coverage.xml

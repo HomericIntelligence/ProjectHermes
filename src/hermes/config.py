@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        frozen=True,
     )
 
     nats_url: str = "nats://localhost:4222"
@@ -100,11 +101,22 @@ class Settings(BaseSettings):
             )
         return self
 
-    @model_validator(mode="after")
-    def _set_public_url_default(self) -> "Settings":
-        if self.hermes_public_url is None:
-            self.hermes_public_url = f"http://localhost:{self.hermes_port}"
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def _set_public_url_default(cls, data: object) -> object:
+        """Default ``hermes_public_url`` from ``hermes_port`` when unset.
+
+        Runs before instance construction so it works on a frozen model. Operates
+        on the raw input dict (env-var dict from pydantic-settings or a kwargs
+        dict from explicit ``Settings(...)`` calls). Other input shapes
+        (e.g. ``BaseModel`` instances) are passed through unchanged.
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("hermes_public_url") is None:
+            port = data.get("hermes_port", cls.model_fields["hermes_port"].default)
+            data["hermes_public_url"] = f"http://localhost:{port}"
+        return data
 
     @field_validator("hermes_host")
     @classmethod

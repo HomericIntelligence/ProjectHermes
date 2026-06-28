@@ -231,14 +231,18 @@ class TestSubjectsRateLimit:
         s = Settings()
         assert s.subjects_rate_limit == "1000/hour"
 
-    def test_subjects_rate_limit_rejects_missing_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_subjects_rate_limit_rejects_missing_period(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("SUBJECTS_RATE_LIMIT", "100")
         from hermes.config import Settings
 
         with pytest.raises(ValidationError):
             Settings()
 
-    def test_subjects_rate_limit_rejects_invalid_period(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_subjects_rate_limit_rejects_invalid_period(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("SUBJECTS_RATE_LIMIT", "100/week")
         from hermes.config import Settings
 
@@ -313,3 +317,31 @@ class TestAgamemnonFieldsRemoved:
             "Settings.agamemnon_api_key was removed; re-introducing it would "
             "break the decoupled-from-Agamemnon contract (see #449)."
         )
+
+
+class TestSettingsImmutable:
+    """Settings is frozen to prevent test pollution (issue #454)."""
+
+    def test_settings_is_frozen_direct_mutation_raises(self) -> None:
+        """Direct field mutation must raise ValidationError (see issue #454)."""
+        from hermes.config import Settings
+
+        s = Settings(_env_file=None)
+        with pytest.raises(ValidationError):
+            s.nats_url = "nats://mutated:4222"  # type: ignore[misc]
+
+    def test_settings_is_frozen_via_get_settings(self) -> None:
+        """Mutation through the cached get_settings() instance must also raise."""
+        from hermes.config import get_settings
+
+        get_settings.cache_clear()
+        s = get_settings()
+        with pytest.raises(ValidationError):
+            s.hermes_port = 9999  # type: ignore[misc]
+
+    def test_public_url_default_still_applies_under_frozen(self) -> None:
+        """Regression: the mode='before' default must still populate hermes_public_url."""
+        from hermes.config import Settings
+
+        s = Settings(hermes_port=8123, _env_file=None)
+        assert s.hermes_public_url == "http://localhost:8123"
