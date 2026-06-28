@@ -21,7 +21,8 @@ import shutil
 import socket
 import subprocess
 import time
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -58,10 +59,10 @@ def _port_listening(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def _wait(predicate: object, *, timeout: float, msg: str) -> None:
+def _wait(predicate: Callable[[], bool], *, timeout: float, msg: str) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if predicate():  # type: ignore[operator]
+        if predicate():
             return
         time.sleep(0.05)
     raise AssertionError(f"timed out after {timeout}s waiting for: {msg}")
@@ -126,7 +127,7 @@ class _NatsServer:
 
 
 @pytest_asyncio.fixture()
-async def nats_server(tmp_path: pytest.TempPathFactory) -> AsyncGenerator[_NatsServer, None]:
+async def nats_server(tmp_path: Path) -> AsyncGenerator[_NatsServer, None]:
     if _NATS_BIN is None:
         pytest.skip("nats-server binary not on PATH")
     if not _flags_supported():
