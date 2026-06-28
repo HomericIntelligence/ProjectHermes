@@ -24,4 +24,5 @@ build/
 .worktrees/
 .issue_implementer/
 .coverage
+coverage.xml
 htmlcov/

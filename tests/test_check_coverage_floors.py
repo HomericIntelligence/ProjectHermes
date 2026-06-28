@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -343,7 +342,7 @@ class TestRun:
             assert "::warning::" not in captured.out
 
     def test_margin_overridable_via_env(
-        self, mod: Any, tmp_project: dict[str, Path], capsys: Any
+        self, mod: Any, tmp_project: dict[str, Path], capsys: Any, monkeypatch: Any
     ) -> None:
         """Respect COVERAGE_FLOOR_MARGIN env var."""
         _write_workflow(
@@ -351,15 +350,12 @@ class TestRun:
             'pixi run coverage report --include="src/hermes/foo.py" --fail-under=80',
         )
         _write_coverage_xml(tmp_project["coverage"], [("hermes/foo.py", 0.90)])
-        os.environ["COVERAGE_FLOOR_MARGIN"] = "5"
-        try:
-            with _mock_root(mod, tmp_project["root"]):
-                result = mod._run()
-                assert result == 0
-                captured = capsys.readouterr()
-                assert "::warning::" in captured.out  # 10pp gap > 5pp margin
-        finally:
-            del os.environ["COVERAGE_FLOOR_MARGIN"]
+        monkeypatch.setenv("COVERAGE_FLOOR_MARGIN", "5")
+        with _mock_root(mod, tmp_project["root"]):
+            result = mod._run()
+            assert result == 0
+            captured = capsys.readouterr()
+            assert "::warning::" in captured.out  # 10pp gap > 5pp margin
 
     def test_orphaned_floor_warns(
         self, mod: Any, tmp_project: dict[str, Path], capsys: Any
