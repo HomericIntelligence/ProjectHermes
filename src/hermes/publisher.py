@@ -297,7 +297,8 @@ class Publisher:
                 pass
             self._reconnect_task = None
         if self._nc is not None:
-            await self._nc.drain()
+            if not self._nc.is_closed:
+                await self._nc.drain()
             self._nc = None
             self._js = None
             self._connected = False
@@ -305,7 +306,9 @@ class Publisher:
 
     @property
     def is_connected(self) -> bool:
-        return self._connected and self._nc is not None
+        # Also check nc.is_closed: with allow_reconnect=False, nats-py may close the
+        # connection without firing disconnected_cb, leaving _connected=True stale.
+        return self._connected and self._nc is not None and not self._nc.is_closed
 
     @property
     def active_subjects(self) -> list[str]:

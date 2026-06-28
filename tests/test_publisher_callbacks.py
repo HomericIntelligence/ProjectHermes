@@ -20,6 +20,7 @@ class TestPublisherConnectionCallbacks:
     async def test_connected_flag_set_on_connect(self) -> None:
         pub = Publisher()
         mock_nc = MagicMock()
+        mock_nc.is_closed = False
         mock_nc.jetstream.return_value = MagicMock()
         mock_nc.jsm.return_value = AsyncMock()
         jsm = AsyncMock()
@@ -35,6 +36,7 @@ class TestPublisherConnectionCallbacks:
     async def test_disconnected_cb_clears_connected_flag(self) -> None:
         pub = Publisher()
         mock_nc = MagicMock()
+        mock_nc.is_closed = False
         mock_nc.jetstream.return_value = MagicMock()
         jsm = AsyncMock()
         jsm.find_stream = AsyncMock()
@@ -58,6 +60,7 @@ class TestPublisherConnectionCallbacks:
     async def test_reconnected_cb_restores_connected_flag(self) -> None:
         pub = Publisher()
         mock_nc = MagicMock()
+        mock_nc.is_closed = False
         mock_nc.jetstream.return_value = MagicMock()
         jsm = AsyncMock()
         jsm.find_stream = AsyncMock()
@@ -89,6 +92,7 @@ class TestPublisherConnectionCallbacks:
         """
         pub = Publisher()
         mock_nc = MagicMock()
+        mock_nc.is_closed = False
         mock_nc.jetstream.return_value = MagicMock()
         jsm = AsyncMock()
         jsm.find_stream = AsyncMock()
@@ -115,6 +119,7 @@ class TestPublisherConnectionCallbacks:
     async def test_disconnected_cb_sets_last_error(self) -> None:
         pub = Publisher()
         mock_nc = MagicMock()
+        mock_nc.is_closed = False
         mock_nc.jetstream.return_value = MagicMock()
         jsm = AsyncMock()
         jsm.find_stream = AsyncMock()
@@ -137,6 +142,7 @@ class TestPublisherConnectionCallbacks:
     async def test_disconnect_method_clears_connected_flag(self) -> None:
         pub = Publisher()
         mock_nc = MagicMock()
+        mock_nc.is_closed = False
         mock_nc.jetstream.return_value = MagicMock()
         mock_nc.drain = AsyncMock()
         jsm = AsyncMock()

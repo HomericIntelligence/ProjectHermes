@@ -608,6 +608,7 @@ class TestTLSPublisherConnect:
 
         pub = Publisher()
         mock_nc = MagicMock()
+        mock_nc.is_closed = False
         mock_nc.jetstream.return_value = MagicMock()
         jsm = AsyncMock()
         jsm.stream_info = AsyncMock(return_value=MagicMock())
