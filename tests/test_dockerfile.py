@@ -69,12 +69,45 @@ def test_dockerfile_pip_install_uses_tomllib_extraction() -> None:
     )
 
 
+_SHELL_SEPARATORS = {"&&", "||", ";", "|", "&"}
+_CMD_WORDS = {"pip", "install", "run", "RUN", "python3", "python", "\\"}
+_FILE_FLAGS = {
+    "-r", "-c", "--requirement", "--constraint", "-t", "--target", "--prefix",
+    "--root", "--cache-dir", "--index-url", "--extra-index-url", "--find-links", "-f",
+}
+
+
+def _assert_pip_line_versioned(line: str) -> None:
+    """Assert every package token on a single pip install line carries a version spec.
+
+    Skip flags, command words, shell separators, and the value following pip's
+    file/constraint flags (-r/-c/--requirement/--constraint), which are filenames.
+    """
+    skip_next = False
+    for token in line.split():
+        if skip_next:
+            skip_next = False
+            continue
+        if token in _FILE_FLAGS:
+            skip_next = True
+            continue
+        if (
+            token.startswith(("--requirement=", "--constraint=", "-"))
+            or token in _CMD_WORDS
+            or token in _SHELL_SEPARATORS
+        ):
+            continue
+        # A bare package name with no specifier is a violation.
+        base = re.sub(r"\[.*?\]", "", token)
+        assert _VERSION_SPEC_RE.search(base), (
+            f"Dockerfile has unversioned package '{token}' in pip install line: {line!r}"
+        )
+
+
 def test_dockerfile_no_bare_unversioned_pip_packages() -> None:
     """No pip install line should list bare package names without version specifiers."""
     text = DOCKERFILE.read_text()
-    # Find any pip install ... line that contains a plain package token (no version spec)
-    # and is NOT using tomllib (i.e. a hardcoded bare name).
-    # We check that every pip install invocation either uses tomllib or only versioned specs.
+    # Check that every pip install invocation either uses tomllib or only versioned specs.
     for line in text.splitlines():
         # Skip comment lines: prose may mention "pip install" without being an
         # actual install invocation (e.g. the --no-deps explanatory note).
@@ -82,50 +115,10 @@ def test_dockerfile_no_bare_unversioned_pip_packages() -> None:
             continue
         if not _PIP_INSTALL_RE.search(line):
             continue
-        # If the line uses tomllib substitution, it's acceptable — deps come from pyproject.toml
+        # tomllib substitution is acceptable — deps come from pyproject.toml.
         if "tomllib" in line or "$(" in line:
             continue
-        # Otherwise, extract package tokens and assert each has a version spec.
-        # Skip flags, common command words, shell separators, and the value
-        # following pip's file/constraint/requirements flags (-r/-c/--requirement/
-        # --constraint) since that token is a filename, not a package.
-        tokens = line.split()
-        _SHELL_SEPARATORS = {"&&", "||", ";", "|", "&"}
-        _CMD_WORDS = {"pip", "install", "run", "RUN", "python3", "python", "\\"}
-        _FILE_FLAGS = {
-            "-r",
-            "-c",
-            "--requirement",
-            "--constraint",
-            "-t",
-            "--target",
-            "--prefix",
-            "--root",
-            "--cache-dir",
-            "--index-url",
-            "--extra-index-url",
-            "--find-links",
-            "-f",
-        }
-        skip_next = False
-        for token in tokens:
-            if skip_next:
-                skip_next = False
-                continue
-            if token in _FILE_FLAGS:
-                skip_next = True
-                continue
-            if token.startswith("--requirement=") or token.startswith("--constraint="):
-                continue
-            if token.startswith("-"):
-                continue
-            if token in _CMD_WORDS or token in _SHELL_SEPARATORS:
-                continue
-            # A bare package name with no specifier is a violation
-            base = re.sub(r"\[.*?\]", "", token)
-            assert _VERSION_SPEC_RE.search(base), (
-                f"Dockerfile has unversioned package '{token}' in pip install line: {line!r}"
-            )
+        _assert_pip_line_versioned(line)
 
 
 class TestDockerfileTini:
