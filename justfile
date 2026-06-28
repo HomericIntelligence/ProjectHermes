@@ -107,6 +107,7 @@ export-openapi:
 audit:
     pixi run pip-audit
 
+# Enforced in CI by the `deps/version-sync` job in .github/workflows/_required.yml (see #594, #496).
 # Check that [project.dependencies] in pyproject.toml has upper bounds on all entries
 dep-check:
     pixi run python scripts/check_dep_sync.py
