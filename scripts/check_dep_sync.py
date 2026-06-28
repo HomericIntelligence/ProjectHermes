@@ -7,10 +7,10 @@ Two checks are performed:
    bound. Without an upper bound, ``pip install .`` may pull a breaking major
    release.
 
-2. Every production dependency declared in pixi.toml ``[pypi-dependencies]``
-   appears in pyproject.toml ``[project.dependencies]`` with the **same**
-   version range. This prevents drift where one file is updated but not the
-   other (see HomericIntelligence/ProjectHermes#594).
+2. Every production dependency must appear in BOTH pyproject.toml
+   ``[project.dependencies]`` AND pixi.toml ``[pypi-dependencies]`` with the
+   same version range (bidirectional parity). This prevents drift where one
+   file is updated but not the other (see #497, follow-up from #338).
 
 The script exits non-zero on any failure, printing the offending entries with
 the file each one came from so reviewers can pinpoint the drift.
@@ -96,7 +96,9 @@ def parse_pixi(table: dict[str, Any]) -> dict[str, str]:
                 )
             out[cname] = ver.strip()
         else:
-            raise SystemExit(f"pixi.toml: unexpected value type for {name!r}: {type(value).__name__}")
+            raise SystemExit(
+                f"pixi.toml: unexpected value type for {name!r}: {type(value).__name__}"
+            )
     return out
 
 
@@ -111,7 +113,12 @@ def check_upper_bounds(deps: list[str]) -> list[str]:
 
 
 def check_parity(py: dict[str, str], pixi: dict[str, str]) -> list[str]:
-    """Return human-readable failure lines for any drift between the two maps."""
+    """Return human-readable failure lines for any drift between the two maps.
+
+    The check is bidirectional: a dependency must appear in BOTH files with
+    the same version range. A name present in only one file is a drift case
+    (the maintainer updated one file and forgot the other — see #497).
+    """
     failures: list[str] = []
     for name, pixi_spec in sorted(pixi.items()):
         py_spec = py.get(name)
@@ -124,6 +131,14 @@ def check_parity(py: dict[str, str], pixi: dict[str, str]) -> list[str]:
         if py_spec != pixi_spec:
             failures.append(
                 f"  {name}: pyproject.toml has {py_spec!r}, pixi.toml has {pixi_spec!r}"
+            )
+    for name, py_spec in sorted(py.items()):
+        if name == SELF_PACKAGE:
+            continue
+        if name not in pixi:
+            failures.append(
+                f"  {name}: declared in pyproject.toml ({py_spec!r}) but missing from "
+                f"pixi.toml [pypi-dependencies]"
             )
     return failures
 
