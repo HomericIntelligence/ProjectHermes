@@ -283,6 +283,24 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
+  macos-tests:
+    name: macos-tests
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+
+      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11  # v0.9.6
+        with:
+          pixi-version: v0.68.0
+          cache: true
+
+      - name: Install locked environment (exercises osx-arm64 solve)
+        run: pixi install --locked
+
+      - name: Unit tests (no NATS/Docker required on macOS runners)
+        run: pixi run pytest -m "not integration"
+
   integration-tests:
     name: integration-tests
     runs-on: ubuntu-24.04
