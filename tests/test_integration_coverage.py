@@ -37,30 +37,32 @@ class TestMainEntryPoint:
 
     def test_parse_args_defaults(self) -> None:
         from hermes.__main__ import _parse_args
+        from hermes.config import get_settings
 
-        args = _parse_args([])
+        args = _parse_args(get_settings(), [])
         assert args.host == "0.0.0.0"
         assert args.log_level == "info"
         assert args.reload is False
 
     def test_parse_args_custom(self) -> None:
         from hermes.__main__ import _parse_args
+        from hermes.config import get_settings
 
         args = _parse_args(
-            ["--host", "127.0.0.1", "--port", "9123", "--log-level", "debug", "--reload"]
+            get_settings(),
+            ["--host", "127.0.0.1", "--port", "9123", "--log-level", "debug", "--reload"],
         )
         assert args.host == "127.0.0.1"
         assert args.port == 9123
         assert args.log_level == "debug"
         assert args.reload is True
 
-    @pytest.mark.parametrize(
-        "level", ["debug", "info", "warning", "error", "critical"]
-    )
+    @pytest.mark.parametrize("level", ["debug", "info", "warning", "error", "critical"])
     def test_parse_args_log_levels(self, level: str) -> None:
         from hermes.__main__ import _parse_args
+        from hermes.config import get_settings
 
-        args = _parse_args(["--log-level", level])
+        args = _parse_args(get_settings(), ["--log-level", level])
         assert args.log_level == level
 
     def test_main_invokes_uvicorn(self) -> None:
@@ -95,8 +97,7 @@ class TestLoggingConfig:
         json_handlers = [
             h
             for h in root.handlers
-            if isinstance(h, logging.StreamHandler)
-            and isinstance(h.formatter, JsonFormatter)
+            if isinstance(h, logging.StreamHandler) and isinstance(h.formatter, JsonFormatter)
         ]
         assert json_handlers, "expected at least one JSON-formatted StreamHandler"
 
@@ -108,15 +109,13 @@ class TestLoggingConfig:
         first_count = sum(
             1
             for h in logging.getLogger().handlers
-            if isinstance(h, logging.StreamHandler)
-            and not isinstance(h, logging.FileHandler)
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         )
         setup_logging(json_format=True)
         second_count = sum(
             1
             for h in logging.getLogger().handlers
-            if isinstance(h, logging.StreamHandler)
-            and not isinstance(h, logging.FileHandler)
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         )
         assert second_count == first_count
 
@@ -234,9 +233,7 @@ class TestPayloadSizeLimitMiddleware:
         client = self._mini_client(max_bytes=10)
         # Forcing a non-integer Content-Length triggers the int() ValueError;
         # the middleware then falls through and rejects on body size > 10.
-        response = client.post(
-            "/", content=b"y" * 50, headers={"Content-Length": "not-a-number"}
-        )
+        response = client.post("/", content=b"y" * 50, headers={"Content-Length": "not-a-number"})
         assert response.status_code == 413
 
     def test_body_too_large_without_content_length_returns_413(self) -> None:

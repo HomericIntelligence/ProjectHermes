@@ -8,44 +8,43 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from hermes.__main__ import _parse_args, main  # noqa: E402
+from hermes.config import get_settings
 
 
 class TestParseArgs:
     def test_defaults(self) -> None:
-        args = _parse_args([])
+        args = _parse_args(get_settings(), [])
         assert args.host == "0.0.0.0"
         assert args.log_level == "info"
         assert args.reload is False
 
     def test_reload_flag(self) -> None:
-        args = _parse_args(["--reload"])
+        args = _parse_args(get_settings(), ["--reload"])
         assert args.reload is True
 
     def test_custom_host(self) -> None:
-        args = _parse_args(["--host", "127.0.0.1"])
+        args = _parse_args(get_settings(), ["--host", "127.0.0.1"])
         assert args.host == "127.0.0.1"
 
     def test_custom_port(self) -> None:
-        args = _parse_args(["--port", "9000"])
+        args = _parse_args(get_settings(), ["--port", "9000"])
         assert args.port == 9000
 
     def test_custom_log_level(self) -> None:
-        args = _parse_args(["--log-level", "debug"])
+        args = _parse_args(get_settings(), ["--log-level", "debug"])
         assert args.log_level == "debug"
 
     @pytest.mark.parametrize("level", ["debug", "info", "warning", "error", "critical"])
     def test_all_log_levels_accepted(self, level: str) -> None:
-        args = _parse_args(["--log-level", level])
+        args = _parse_args(get_settings(), ["--log-level", level])
         assert args.log_level == level
 
     def test_invalid_log_level_raises(self) -> None:
         with pytest.raises(SystemExit):
-            _parse_args(["--log-level", "verbose"])
+            _parse_args(get_settings(), ["--log-level", "verbose"])
 
     def test_port_default_matches_settings(self) -> None:
-        from hermes.config import get_settings
-
-        args = _parse_args([])
+        args = _parse_args(get_settings(), [])
         assert args.port == get_settings().hermes_port
 
 
@@ -101,9 +100,10 @@ class TestMain:
 
     def test_main_calls_setup_logging(self) -> None:
         mock_uvicorn = MagicMock()
-        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), patch(
-            "hermes.__main__.setup_logging"
-        ) as mock_setup:
+        with (
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
+            patch("hermes.__main__.setup_logging") as mock_setup,
+        ):
             main([])
 
         mock_setup.assert_called_once_with(level=logging.INFO, json_format=False)
@@ -111,9 +111,11 @@ class TestMain:
     def test_main_log_json_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LOG_JSON", "true")
         mock_uvicorn = MagicMock()
-        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), patch(
-            "hermes.__main__.setup_logging"
-        ) as mock_setup, patch("hermes.__main__.get_settings") as mock_get_settings:
+        with (
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
+            patch("hermes.__main__.setup_logging") as mock_setup,
+            patch("hermes.__main__.get_settings") as mock_get_settings,
+        ):
             mock_settings = MagicMock()
             mock_settings.log_json = True
             mock_settings.hermes_port = 8080
@@ -124,18 +126,35 @@ class TestMain:
 
     def test_main_log_level_forwarded(self) -> None:
         mock_uvicorn = MagicMock()
-        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), patch(
-            "hermes.__main__.setup_logging"
-        ) as mock_setup:
+        with (
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
+            patch("hermes.__main__.setup_logging") as mock_setup,
+        ):
             main(["--log-level", "debug"])
 
         mock_setup.assert_called_once_with(level=logging.DEBUG, json_format=False)
 
     def test_main_basicconfig_not_called(self) -> None:
         mock_uvicorn = MagicMock()
-        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), patch(
-            "hermes.__main__.setup_logging"
-        ), patch("logging.basicConfig") as mock_basicconfig:
+        with (
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
+            patch("hermes.__main__.setup_logging"),
+            patch("logging.basicConfig") as mock_basicconfig,
+        ):
             main([])
 
         mock_basicconfig.assert_not_called()
+
+    def test_main_calls_get_settings_once(self) -> None:
+        mock_uvicorn = MagicMock()
+        with (
+            patch.dict("sys.modules", {"uvicorn": mock_uvicorn}),
+            patch("hermes.__main__.get_settings") as mock_get_settings,
+        ):
+            mock_settings = MagicMock()
+            mock_settings.log_json = False
+            mock_settings.hermes_port = 8080
+            mock_get_settings.return_value = mock_settings
+            main([])
+
+        assert mock_get_settings.call_count == 1
