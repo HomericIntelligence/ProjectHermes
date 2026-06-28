@@ -294,7 +294,11 @@ jobs:
         run: docker build --no-cache -t hermes:test .
 
       - name: Run import sanity check
-        run: docker run --rm hermes:test python -c "import hermes; print(hermes.__version__)"
+        # The image COPYs src/hermes/ without pip-installing the package, so no
+        # dist-info exists and hermes.__version__ resolves to "unknown" — this
+        # step smoke-tests that the package and its submodules *import* cleanly,
+        # not that a versioned wheel is installed.
+        run: docker run --rm hermes:test python -c "import hermes; import hermes.server; assert hermes.server is not None; print('import OK:', hermes.__version__)"
 
   security-dependency-scan:
     name: security/dependency-scan
