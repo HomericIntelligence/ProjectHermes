@@ -1,0 +1,40 @@
+name: docker-build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - pyproject.toml
+      - src/hermes/**
+      - .github/workflows/docker-build.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-build-${{ github.head_ref || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  docker-build-smoke:
+    # Build the production image whenever a PR touches the Dockerfile or its
+    # build inputs, so a broken layer (e.g. a bad apt package name in the
+    # tini/curl install) fails fast in CI instead of at deploy time.
+    # See issue #562 (follow-up from #355).
+    name: docker-build-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+
+      - name: Build image (smoke)
+        # Blocking: a non-zero exit from `docker buildx build` fails the PR.
+        # --load makes the image available to the local daemon; no --push.
+        run: docker buildx build --load -t hermes:ci .
