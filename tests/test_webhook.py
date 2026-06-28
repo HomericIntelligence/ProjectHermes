@@ -168,6 +168,20 @@ class TestHealthEndpoint:
         assert isinstance(body["nats_retry_interval"], float)
         assert body["nats_retry_interval"] == 5.0
 
+    def test_health_includes_nats_reconnect_max_interval(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "nats_reconnect_max_interval" in body
+        assert isinstance(body["nats_reconnect_max_interval"], float)
+        assert body["nats_reconnect_max_interval"] == 60.0
+
+    def test_health_includes_nats_reconnect_jitter(self) -> None:
+        client = _build_client()
+        body = client.get("/health").json()
+        assert "nats_reconnect_jitter" in body
+        assert isinstance(body["nats_reconnect_jitter"], float)
+        assert body["nats_reconnect_jitter"] == 0.5
+
     def test_health_includes_dead_letter_queue_depth_gauge(self) -> None:
         """Issue #531: surface dead_letter_queue_depth gauge in /health."""
         from hermes.publisher import Publisher

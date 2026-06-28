@@ -406,6 +406,8 @@ async def health(response: Response) -> HealthResponse:
         nats_last_error=publisher.last_error,
         nats_retry_attempts=cfg.nats_retry_attempts,
         nats_retry_interval=float(cfg.nats_retry_interval),
+        nats_reconnect_max_interval=float(cfg.nats_reconnect_max_interval),
+        nats_reconnect_jitter=float(cfg.nats_reconnect_jitter),
         last_reconnect_attempt_at=publisher.last_reconnect_attempt_at,
         consecutive_reconnect_failures=publisher.consecutive_reconnect_failures,
         nats_reconnect_loop_active=publisher.reconnect_loop_active,

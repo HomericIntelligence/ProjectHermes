@@ -80,6 +80,8 @@ Every message published to NATS JetStream includes a `schema_version` integer fi
 | NATS_RETRY_INTERVAL   | 5.0                            | Seconds between initial-connect retries at startup (also surfaced via /health) |
 | NATS_RECONNECT_INTERVAL | 5.0                          | Seconds between external reconnect attempts             |
 | NATS_RECONNECT_HARD_TIMEOUT | 5.0                      | Per-attempt hard timeout for external reconnect (seconds) |
+| NATS_RECONNECT_MAX_INTERVAL | 60.0                       | Upper bound (seconds) for exponential backoff between failed reconnect attempts; prevents thundering herd when multiple Hermes instances reconnect after a NATS restart |
+| NATS_RECONNECT_JITTER       | 0.5                        | Multiplicative jitter applied to backoff delay (delay sampled from `[delay*(1-j), delay*(1+j)]`); default `0.5` reproduces the `uniform(0.5, 1.5)` spread from issue #444; set `0` to disable |
 | DEAD_LETTER_API_KEY   |                                | API key for GET/DELETE /dead-letters (min 32 chars; auth bypassed when unset) |
 | SHUTDOWN_TIMEOUT      | 10.0                           | Graceful shutdown timeout in seconds                    |
 | HERMES_CPU_LIMIT      | 0.50                           | Compose-only: max CPUs per container (`deploy.resources.limits.cpus`) |
