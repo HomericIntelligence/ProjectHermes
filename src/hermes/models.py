@@ -73,6 +73,8 @@ class HealthResponse(BaseModel):
     nats_last_error: str = ""
     nats_retry_attempts: int = 3
     nats_retry_interval: float = 5.0
+    nats_reconnect_max_interval: float = 60.0
+    nats_reconnect_jitter: float = 0.5
     last_reconnect_attempt_at: datetime | None = None
     consecutive_reconnect_failures: int = 0
     nats_reconnect_loop_active: bool = False

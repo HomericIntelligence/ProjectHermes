@@ -70,9 +70,10 @@ class Settings(BaseSettings):
     nats_reconnect_max_interval: float = Field(default=60.0, gt=0)
     # Multiplicative jitter applied to the computed backoff delay; the final delay
     # is sampled uniformly from ``[delay * (1 - jitter), delay * (1 + jitter)]``.
-    # Set to ``0`` to disable jitter (deterministic backoff).  Bounded to ``< 1``
-    # so the lower bound stays positive.
-    nats_reconnect_jitter: float = Field(default=0.1, ge=0, lt=1)
+    # Default ``0.5`` reproduces the ``uniform(0.5, 1.5)`` spread specified in
+    # issue #444 — large enough to desynchronise N instances reconnecting after
+    # a shared NATS outage.  Set to ``0`` to disable jitter (deterministic).
+    nats_reconnect_jitter: float = Field(default=0.5, ge=0, lt=1)
 
     @field_validator("hermes_public_url", mode="before")
     @classmethod
