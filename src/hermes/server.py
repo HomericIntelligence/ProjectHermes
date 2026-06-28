@@ -45,6 +45,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Shutdown state — module-level so tests can inspect/mutate directly
 # ---------------------------------------------------------------------------
+# NOTE: ``_shutdown_event`` is rebound in ``lifespan`` (line ~153) to a fresh
+# ``asyncio.Event`` bound to the running loop. ``ShutdownMiddleware.dispatch``
+# reads this name as a module global on every request, so the rebind is picked
+# up automatically. Any future move of this state onto ``app.state`` must
+# update ``ShutdownMiddleware`` and ``_on_shutdown_signal`` in lockstep.
 
 _shutdown_event: asyncio.Event = asyncio.Event()
 _inflight: int = 0
@@ -298,6 +303,13 @@ class ShutdownMiddleware(BaseHTTPMiddleware):  # type: ignore[misc]
     """
 
     async def dispatch(self, request: Request, call_next: object) -> Response:
+        # ``_shutdown_event`` is resolved as a module global on every call, not
+        # captured at class-definition time. ``lifespan`` rebinds the module
+        # attribute to a fresh ``asyncio.Event`` bound to the running loop
+        # (see ``hermes.server`` ~line 153); reading it here picks up that
+        # rebind automatically. If this state is ever moved to ``app.state``
+        # (issue #459), switch to ``request.app.state.shutdown_event`` and
+        # update ``_on_shutdown_signal`` and ``health`` to match.
         if _shutdown_event.is_set() and request.url.path == "/webhook":
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
