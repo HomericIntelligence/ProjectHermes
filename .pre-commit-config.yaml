@@ -76,6 +76,19 @@ repos:
         pass_filenames: false
         # Run once per commit; the script scans the tracked file set itself.
         always_run: true
+
+      - id: no-bare-crypto-in-tests
+        name: "forbid bare hmac/hashlib imports in tests/ (issue #468)"
+        description: >
+          Regression guard for #468 (follow-up from #329). All test files
+          must use `sign_body` / `TEST_SECRET` from `tests/helpers.py`
+          instead of re-implementing HMAC signing inline. The only file
+          allowed to import `hmac` or `hashlib` is `tests/helpers.py`.
+        language: system
+        entry: python3 scripts/check-no-bare-crypto-in-tests.py
+        pass_filenames: false
+        always_run: true
+
       - id: require-signed-commits
         name: "require gpg/ssh-signed commits on push"
         description: >
