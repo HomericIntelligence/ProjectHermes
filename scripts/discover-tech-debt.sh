@@ -14,9 +14,14 @@ grep -rn "FIXME\|TODO\|DEPRECATED\|HACK\|XXX" \
 if [ "$rc" -eq 0 ]; then
   # Markers found and already printed above; signal "dirty".
   exit 1
+elif [ "$rc" -ge 2 ]; then
+  # grep exits >=2 on a real error (bad path, regex error) — do not mask it as
+  # a clean scan.
+  echo "Tech-debt scan error: grep exited with status $rc." >&2
+  exit "$rc"
 else
-  # No matches. Sentinel intentionally avoids the bare marker tokens so it does
-  # not perpetuate noise when echoed into logs or comments.
+  # rc == 1: no matches. Sentinel intentionally avoids the bare marker tokens so
+  # it does not perpetuate noise when echoed into logs or comments.
   echo "Tech-debt scan clean: no debt markers found in source."
   exit 0
 fi
