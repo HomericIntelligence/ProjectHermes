@@ -30,7 +30,17 @@ assert_eq "clean input emits one raw line" "type=raw,value=hotfix-v1.2.3" "$out"
 out="$(IMAGE_TAG=$'\rhot\nfix\t-v1.2.3' bash "$SCRIPT")"
 assert_eq "CR/LF/tab stripped, single line" "type=raw,value=hotfix-v1.2.3" "$out"
 
-# Case D: input that becomes empty after sanitization -> nonzero exit.
+# Case D: multi-character leading separator run -> stripped entirely.
+out="$(IMAGE_TAG=".-hotfix" bash "$SCRIPT")"
+assert_eq "multi-char leading separators stripped" "type=raw,value=hotfix" "$out"
+
+out="$(IMAGE_TAG="...foo" bash "$SCRIPT")"
+assert_eq "leading dots stripped entirely" "type=raw,value=foo" "$out"
+
+out="$(IMAGE_TAG="-.-foo" bash "$SCRIPT")"
+assert_eq "mixed leading separators stripped" "type=raw,value=foo" "$out"
+
+# Case E: input that becomes empty after sanitization -> nonzero exit.
 set +e
 IMAGE_TAG='!!!@@@###' bash "$SCRIPT" >/dev/null 2>&1
 rc=$?

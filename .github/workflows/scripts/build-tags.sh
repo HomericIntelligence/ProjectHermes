@@ -21,8 +21,10 @@ stripped="${stripped//$'\t'/}"
 # Keep only the Docker tag charset: [A-Za-z0-9_.-]. Anything else becomes ''.
 clean="$(printf '%s' "$stripped" | LC_ALL=C tr -cd 'A-Za-z0-9_.-')"
 
-# Docker rejects leading '.' or '-'; strip until the first valid char.
-clean="${clean##[.-]}"
+# Docker rejects leading '.' or '-'; strip the entire leading run of '.' and '-'.
+# ${clean%%[!.-]*} yields the longest leading run of [.-] chars; we then strip
+# that prefix so inputs like '.-foo' or '...foo' correctly become 'foo'.
+clean="${clean#"${clean%%[!.-]*}"}"
 
 # Truncate to Docker's 128-char tag limit.
 clean="${clean:0:128}"
