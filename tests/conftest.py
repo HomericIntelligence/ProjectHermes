@@ -19,11 +19,15 @@ from tests.helpers import FIXED_TS as _FIXED_TS
 
 @pytest.fixture(autouse=True)
 def reset_server_state() -> Generator[None, None, None]:
+    from hermes.server import app
+
     _server._shutdown_event = asyncio.Event()
     _server._inflight = 0
+    app.state.inflight_lock = asyncio.Lock()
     yield
     _server._shutdown_event = asyncio.Event()
     _server._inflight = 0
+    app.state.inflight_lock = asyncio.Lock()
 
 
 def _nats_url() -> str:
