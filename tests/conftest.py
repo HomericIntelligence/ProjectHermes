@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import nats
 import pytest
 import pytest_asyncio
+from fastapi.testclient import TestClient
 
 import hermes.server as _server
 from hermes.config import get_settings
 from hermes.models import WebhookPayload
 from hermes.publisher import Publisher
-from tests.helpers import FIXED_TS as _FIXED_TS
+from tests.helpers import FIXED_TS as _FIXED_TS, TEST_SECRET as _TEST_SECRET
 
 
 @pytest.fixture(autouse=True)
@@ -105,3 +108,54 @@ def task_payload() -> WebhookPayload:
         data={"teamId": "team-1", "task_id": "task-abc"},
         timestamp=_FIXED_TS,
     )
+
+
+@pytest.fixture()
+def make_test_client() -> Callable[..., TestClient]:
+    """Factory returning a TestClient wired to a mock Publisher and overridden Settings.
+
+    Replaces duplicate _build_client helpers in test_webhook.py, test_request_id_context.py,
+    and test_shutdown.py. Pass ``webhook_secret=None`` to skip the Settings override entirely
+    (for tests that mutate ``get_settings().webhook_secret`` directly).
+    """
+    from hermes.config import Settings
+    from hermes.rate_limit import limiter
+    from hermes.server import app
+
+    def _factory(
+        *,
+        publisher: MagicMock | None = None,
+        connected: bool = True,
+        webhook_secret: str | None = _TEST_SECRET,
+        publish_side_effect: Any = None,
+        raise_server_exceptions: bool = True,
+        reset_rate_limiter: bool = True,
+        reconnect_count: int = 0,
+        last_error: str = "",
+        last_reconnect_attempt_at: object = None,
+        consecutive_reconnect_failures: int = 0,
+        reconnect_loop_active: bool = False,
+    ) -> TestClient:
+        if publisher is None:
+            publisher = MagicMock(spec=Publisher)
+            publisher.is_connected = connected
+            publisher.active_subjects = []
+            publisher.active_subjects_max = 1000
+            publisher.dead_letter_count = 0
+            publisher.publish = AsyncMock(side_effect=publish_side_effect)
+            publisher.disconnect = AsyncMock()
+            publisher.reconnect_count = reconnect_count
+            publisher.last_error = last_error
+            publisher.last_reconnect_attempt_at = last_reconnect_attempt_at
+            publisher.consecutive_reconnect_failures = consecutive_reconnect_failures
+            publisher.reconnect_loop_active = reconnect_loop_active
+
+        app.state.publisher = publisher
+        if webhook_secret is not None:
+            test_settings = Settings(webhook_secret=webhook_secret)
+            app.dependency_overrides[get_settings] = lambda: test_settings
+        if reset_rate_limiter:
+            limiter._storage.reset()  # type: ignore[attr-defined]
+        return TestClient(app, raise_server_exceptions=raise_server_exceptions)
+
+    return _factory

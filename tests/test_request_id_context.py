@@ -6,28 +6,10 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
 
 from tests.helpers import TEST_SECRET, sign_body
-
-
-def _build_client(*, connected: bool = True) -> TestClient:
-    from hermes.config import Settings, get_settings
-    from hermes.publisher import Publisher
-    from hermes.server import app
-
-    mock_publisher = MagicMock(spec=Publisher)
-    mock_publisher.is_connected = connected
-    mock_publisher.active_subjects = []
-    mock_publisher.dead_letter_count = 0
-    mock_publisher.publish = AsyncMock()
-
-    app.state.publisher = mock_publisher
-    app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=TEST_SECRET)
-    return TestClient(app, raise_server_exceptions=False)
 
 
 # ---------------------------------------------------------------------------
@@ -39,10 +21,10 @@ class TestRequestIdInLogContext:
     """Verify that request_id appears in extra fields of log records."""
 
     def test_invalid_payload_log_contains_request_id(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, make_test_client
     ) -> None:
         """A 422 from invalid payload should emit a log record with request_id in extra."""
-        client = _build_client()
+        client = make_test_client(raise_server_exceptions=False)
         body_bytes = json.dumps({"bad": "payload"}).encode()
         fixed_id = str(uuid.uuid4())
 
@@ -64,10 +46,10 @@ class TestRequestIdInLogContext:
         )
 
     def test_nats_not_connected_log_contains_request_id(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, make_test_client
     ) -> None:
         """A 503 from NATS disconnected should emit a log record with request_id in extra."""
-        client = _build_client(connected=False)
+        client = make_test_client(connected=False, raise_server_exceptions=False)
         payload = {
             "event": "agent.created",
             "data": {"host": "h", "name": "n"},
@@ -94,23 +76,14 @@ class TestRequestIdInLogContext:
         )
 
     def test_publish_timeout_log_contains_request_id(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, make_test_client
     ) -> None:
         """A 503 from publish timeout should emit a log record with request_id in extra."""
         import asyncio
 
-        from hermes.config import Settings, get_settings
-        from hermes.publisher import Publisher
-        from hermes.server import app
-
-        mock_publisher = MagicMock(spec=Publisher)
-        mock_publisher.is_connected = True
-        mock_publisher.active_subjects = []
-        mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
-        app.state.publisher = mock_publisher
-        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=TEST_SECRET)
-
-        client = TestClient(app, raise_server_exceptions=False)
+        client = make_test_client(
+            publish_side_effect=asyncio.TimeoutError(), raise_server_exceptions=False
+        )
         payload = {
             "event": "agent.created",
             "data": {"host": "h", "name": "n"},
@@ -142,9 +115,9 @@ class TestRequestIdInLogContext:
 class TestRequestIdInErrorResponses:
     """Verify that request_id is included in HTTP error response bodies."""
 
-    def test_422_error_body_contains_request_id(self) -> None:
+    def test_422_error_body_contains_request_id(self, make_test_client) -> None:
         """Invalid payload 422 response body must include request_id."""
-        client = _build_client()
+        client = make_test_client(raise_server_exceptions=False)
         body_bytes = json.dumps({"bad": "payload"}).encode()
         fixed_id = str(uuid.uuid4())
 
@@ -162,9 +135,9 @@ class TestRequestIdInErrorResponses:
         assert "request_id" in data
         assert data["request_id"] == fixed_id
 
-    def test_401_error_body_contains_request_id(self) -> None:
+    def test_401_error_body_contains_request_id(self, make_test_client) -> None:
         """Bad signature 401 response body must include request_id."""
-        client = _build_client()
+        client = make_test_client(raise_server_exceptions=False)
         payload = {
             "event": "agent.created",
             "data": {"host": "h", "name": "n"},
@@ -187,9 +160,9 @@ class TestRequestIdInErrorResponses:
         assert "request_id" in data
         assert data["request_id"] == fixed_id
 
-    def test_503_nats_disconnected_body_contains_request_id(self) -> None:
+    def test_503_nats_disconnected_body_contains_request_id(self, make_test_client) -> None:
         """NATS disconnected 503 response body must include request_id."""
-        client = _build_client(connected=False)
+        client = make_test_client(connected=False, raise_server_exceptions=False)
         payload = {
             "event": "agent.created",
             "data": {"host": "h", "name": "n"},
@@ -212,22 +185,13 @@ class TestRequestIdInErrorResponses:
         assert "request_id" in data
         assert data["request_id"] == fixed_id
 
-    def test_503_publish_timeout_body_contains_request_id(self) -> None:
+    def test_503_publish_timeout_body_contains_request_id(self, make_test_client) -> None:
         """Publish timeout 503 response body must include request_id."""
         import asyncio
 
-        from hermes.config import Settings, get_settings
-        from hermes.publisher import Publisher
-        from hermes.server import app
-
-        mock_publisher = MagicMock(spec=Publisher)
-        mock_publisher.is_connected = True
-        mock_publisher.active_subjects = []
-        mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
-        app.state.publisher = mock_publisher
-        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=TEST_SECRET)
-
-        client = TestClient(app, raise_server_exceptions=False)
+        client = make_test_client(
+            publish_side_effect=asyncio.TimeoutError(), raise_server_exceptions=False
+        )
         payload = {
             "event": "agent.created",
             "data": {"host": "h", "name": "n"},
@@ -250,9 +214,9 @@ class TestRequestIdInErrorResponses:
         assert "request_id" in data
         assert data["request_id"] == fixed_id
 
-    def test_error_body_contains_detail(self) -> None:
+    def test_error_body_contains_detail(self, make_test_client) -> None:
         """Error bodies must still contain the original detail field."""
-        client = _build_client()
+        client = make_test_client(raise_server_exceptions=False)
         body_bytes = json.dumps({"bad": "payload"}).encode()
 
         response = client.post(
@@ -268,9 +232,9 @@ class TestRequestIdInErrorResponses:
         assert "detail" in data
         assert isinstance(data["detail"], str)
 
-    def test_generated_request_id_appears_in_error_body(self) -> None:
+    def test_generated_request_id_appears_in_error_body(self, make_test_client) -> None:
         """When no X-Request-ID is sent, a generated UUID should appear in error body."""
-        client = _build_client()
+        client = make_test_client(raise_server_exceptions=False)
         body_bytes = json.dumps({"bad": "payload"}).encode()
 
         response = client.post(

@@ -12,109 +12,66 @@ from fastapi.testclient import TestClient
 from tests.helpers import TEST_SECRET, sign_body
 
 
-def _build_client(
-    *,
-    connected: bool = True,
-    reconnect_count: int = 0,
-    last_error: str = "",
-    last_reconnect_attempt_at: object = None,
-    consecutive_reconnect_failures: int = 0,
-    reconnect_loop_active: bool = False,
-) -> TestClient:
-    """Build a TestClient with a mocked Publisher and a known webhook secret."""
-    from hermes.config import Settings, get_settings
-    from hermes.publisher import Publisher
-    from hermes.rate_limit import limiter
-    from hermes.server import app
-
-    mock_publisher = MagicMock(spec=Publisher)
-    mock_publisher.is_connected = connected
-    mock_publisher.active_subjects = []
-    mock_publisher.dead_letter_count = 0
-    mock_publisher.active_subjects_max = 1000
-    mock_publisher.publish = AsyncMock()
-    mock_publisher.reconnect_count = reconnect_count
-    mock_publisher.last_error = last_error
-    mock_publisher.last_reconnect_attempt_at = last_reconnect_attempt_at
-    mock_publisher.consecutive_reconnect_failures = consecutive_reconnect_failures
-    mock_publisher.reconnect_loop_active = reconnect_loop_active
-
-    # Inject the mock before the test client starts
-    app.state.publisher = mock_publisher
-    # Override settings via FastAPI dependency injection
-    test_settings = Settings(webhook_secret=TEST_SECRET)
-    app.dependency_overrides[get_settings] = lambda: test_settings
-    # Reset rate limiter so each test starts with a clean slate
-    limiter._storage.reset()  # type: ignore[attr-defined]
-    return TestClient(app, raise_server_exceptions=True)
-
-
-def _build_client_disconnected() -> TestClient:
-    """Build a TestClient where the Publisher reports NATS as disconnected."""
-    return _build_client(connected=False)
-
-
 class TestHealthEndpoint:
     """Tests for the GET /health liveness endpoint."""
 
-    def test_health_returns_200_when_connected(self) -> None:
-        client = _build_client()
+    def test_health_returns_200_when_connected(self, make_test_client) -> None:
+        client = make_test_client()
         response = client.get("/health")
         assert response.status_code == 200
 
-    def test_health_returns_ok_status(self) -> None:
-        client = _build_client()
+    def test_health_returns_ok_status(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert body["status"] == "ok"
 
-    def test_health_includes_nats_connected(self) -> None:
-        client = _build_client()
+    def test_health_includes_nats_connected(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "nats_connected" in body
 
-    def test_health_includes_hermes_public_url(self) -> None:
-        client = _build_client()
+    def test_health_includes_hermes_public_url(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "hermes_public_url" in body
 
-    def test_health_returns_503_when_nats_disconnected(self) -> None:
-        client = _build_client_disconnected()
+    def test_health_returns_503_when_nats_disconnected(self, make_test_client) -> None:
+        client = make_test_client(connected=False)
         response = client.get("/health")
         assert response.status_code == 503
 
-    def test_health_returns_degraded_status_when_nats_disconnected(self) -> None:
-        client = _build_client_disconnected()
+    def test_health_returns_degraded_status_when_nats_disconnected(self, make_test_client) -> None:
+        client = make_test_client(connected=False)
         body = client.get("/health").json()
         assert body["status"] == "degraded"
 
-    def test_health_returns_nats_connected_false_when_disconnected(self) -> None:
-        client = _build_client_disconnected()
+    def test_health_returns_nats_connected_false_when_disconnected(self, make_test_client) -> None:
+        client = make_test_client(connected=False)
         body = client.get("/health").json()
         assert body["nats_connected"] is False
 
-    def test_health_includes_inflight_requests(self) -> None:
-        client = _build_client()
+    def test_health_includes_inflight_requests(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "inflight_requests" in body
         assert isinstance(body["inflight_requests"], int)
         assert body["inflight_requests"] >= 0
 
-    def test_health_includes_timeout_fields(self) -> None:
-        client = _build_client()
+    def test_health_includes_timeout_fields(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "timeouts" in body
         assert body["timeouts"]["nats_connect"] > 0
         assert body["timeouts"]["nats_publish"] > 0
 
-    def test_health_includes_dead_letter_count(self) -> None:
-        client = _build_client()
+    def test_health_includes_dead_letter_count(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "dead_letter_count" in body
         assert isinstance(body["dead_letter_count"], int)
 
-    def test_health_dead_letter_count_reflects_publisher(self) -> None:
+    def test_health_dead_letter_count_reflects_publisher(self, make_test_client) -> None:
         from hermes.publisher import Publisher
-        from hermes.server import app
 
         mock_publisher = MagicMock(spec=Publisher)
         mock_publisher.is_connected = True
@@ -126,66 +83,64 @@ class TestHealthEndpoint:
         mock_publisher.consecutive_reconnect_failures = 0
         mock_publisher.reconnect_loop_active = False
         mock_publisher.publish = AsyncMock()
-        app.state.publisher = mock_publisher
 
-        client = TestClient(app, raise_server_exceptions=True)
+        client = make_test_client(publisher=mock_publisher, reset_rate_limiter=False)
         body = client.get("/health").json()
         assert body["dead_letter_count"] == 7
 
-    def test_health_includes_nats_reconnect_count(self) -> None:
-        client = _build_client(reconnect_count=3)
+    def test_health_includes_nats_reconnect_count(self, make_test_client) -> None:
+        client = make_test_client(reconnect_count=3)
         body = client.get("/health").json()
         assert "nats_reconnect_count" in body
         assert body["nats_reconnect_count"] == 3
 
-    def test_health_reconnect_count_defaults_to_zero(self) -> None:
-        client = _build_client()
+    def test_health_reconnect_count_defaults_to_zero(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert body["nats_reconnect_count"] == 0
 
-    def test_health_includes_nats_last_error(self) -> None:
-        client = _build_client(last_error="NATS disconnected")
+    def test_health_includes_nats_last_error(self, make_test_client) -> None:
+        client = make_test_client(last_error="NATS disconnected")
         body = client.get("/health").json()
         assert "nats_last_error" in body
         assert body["nats_last_error"] == "NATS disconnected"
 
-    def test_health_last_error_defaults_to_empty_string(self) -> None:
-        client = _build_client()
+    def test_health_last_error_defaults_to_empty_string(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert body["nats_last_error"] == ""
 
-    def test_health_includes_nats_retry_attempts(self) -> None:
-        client = _build_client()
+    def test_health_includes_nats_retry_attempts(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "nats_retry_attempts" in body
         assert isinstance(body["nats_retry_attempts"], int)
         assert body["nats_retry_attempts"] == 3
 
-    def test_health_includes_nats_retry_interval(self) -> None:
-        client = _build_client()
+    def test_health_includes_nats_retry_interval(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "nats_retry_interval" in body
         assert isinstance(body["nats_retry_interval"], float)
         assert body["nats_retry_interval"] == 5.0
 
-    def test_health_includes_nats_reconnect_max_interval(self) -> None:
-        client = _build_client()
+    def test_health_includes_nats_reconnect_max_interval(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "nats_reconnect_max_interval" in body
         assert isinstance(body["nats_reconnect_max_interval"], float)
         assert body["nats_reconnect_max_interval"] == 60.0
 
-    def test_health_includes_nats_reconnect_jitter(self) -> None:
-        client = _build_client()
+    def test_health_includes_nats_reconnect_jitter(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/health").json()
         assert "nats_reconnect_jitter" in body
         assert isinstance(body["nats_reconnect_jitter"], float)
         assert body["nats_reconnect_jitter"] == 0.5
 
-    def test_health_includes_dead_letter_queue_depth_gauge(self) -> None:
+    def test_health_includes_dead_letter_queue_depth_gauge(self, make_test_client) -> None:
         """Issue #531: surface dead_letter_queue_depth gauge in /health."""
         from hermes.publisher import Publisher
-        from hermes.server import app
 
         mock_publisher = MagicMock(spec=Publisher)
         mock_publisher.is_connected = True
@@ -200,9 +155,8 @@ class TestHealthEndpoint:
         mock_publisher.consecutive_reconnect_failures = 0
         mock_publisher.reconnect_loop_active = False
         mock_publisher.publish = AsyncMock()
-        app.state.publisher = mock_publisher
 
-        client = TestClient(app, raise_server_exceptions=True)
+        client = make_test_client(publisher=mock_publisher, reset_rate_limiter=False)
         body = client.get("/health").json()
         assert "dead_letter_queue_depth" in body
         assert body["dead_letter_queue_depth"] == 42
@@ -213,16 +167,16 @@ class TestHealthEndpoint:
         # 42 / 1000 * 100 == 4.2
         assert body["dead_letter_queue_alert_threshold_pct"] == pytest.approx(4.2)
 
-    def test_health_dead_letter_threshold_pct_zero_when_empty(self) -> None:
+    def test_health_dead_letter_threshold_pct_zero_when_empty(self, make_test_client) -> None:
         """alert_threshold_pct is 0.0 when no dead-letters are queued."""
-        client = _build_client()
+        client = make_test_client()
         body = client.get("/health").json()
         assert body["dead_letter_queue_depth"] == 0
         assert body["dead_letter_queue_alert_threshold_pct"] == 0.0
 
-    def test_health_includes_reconnect_loop_fields_defaults(self) -> None:
+    def test_health_includes_reconnect_loop_fields_defaults(self, make_test_client) -> None:
         """Issue #528: /health surfaces reconnect-loop state with safe defaults."""
-        client = _build_client()
+        client = make_test_client()
         body = client.get("/health").json()
         assert "last_reconnect_attempt_at" in body
         assert body["last_reconnect_attempt_at"] is None
@@ -231,12 +185,12 @@ class TestHealthEndpoint:
         assert "nats_reconnect_loop_active" in body
         assert body["nats_reconnect_loop_active"] is False
 
-    def test_health_surfaces_reconnect_loop_state(self) -> None:
+    def test_health_surfaces_reconnect_loop_state(self, make_test_client) -> None:
         """Issue #528: /health reflects publisher reconnect-loop state."""
         from datetime import datetime, timezone
 
         ts = datetime(2026, 5, 12, 10, 30, 0, tzinfo=timezone.utc)
-        client = _build_client(
+        client = make_test_client(
             last_reconnect_attempt_at=ts,
             consecutive_reconnect_failures=4,
             reconnect_loop_active=True,
@@ -246,11 +200,11 @@ class TestHealthEndpoint:
         assert body["consecutive_reconnect_failures"] == 4
         assert body["nats_reconnect_loop_active"] is True
 
-    def test_health_reports_dead_letter_api_key_configured_when_set(self) -> None:
+    def test_health_reports_dead_letter_api_key_configured_when_set(self, make_test_client) -> None:
         from unittest.mock import patch
         from hermes.config import Settings
 
-        client = _build_client()
+        client = make_test_client()
         test_settings = Settings(
             webhook_secret=TEST_SECRET,
             dead_letter_api_key="k" * 32,
@@ -259,11 +213,11 @@ class TestHealthEndpoint:
             body = client.get("/health").json()
         assert body["dead_letter_api_key_configured"] is True
 
-    def test_health_reports_dead_letter_api_key_not_configured_when_unset(self) -> None:
+    def test_health_reports_dead_letter_api_key_not_configured_when_unset(self, make_test_client) -> None:
         from unittest.mock import patch
         from hermes.config import Settings
 
-        client = _build_client()
+        client = make_test_client()
         test_settings = Settings(
             webhook_secret=TEST_SECRET,
             dead_letter_api_key="",
@@ -274,36 +228,38 @@ class TestHealthEndpoint:
 
 
 class TestReadyEndpoint:
-    def test_ready_returns_200_when_connected(self) -> None:
-        client = _build_client()
+    def test_ready_returns_200_when_connected(self, make_test_client) -> None:
+        client = make_test_client()
         response = client.get("/ready")
         assert response.status_code == 200
 
-    def test_ready_returns_ready_true_when_connected(self) -> None:
-        client = _build_client()
+    def test_ready_returns_ready_true_when_connected(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/ready").json()
         assert body["ready"] is True
 
-    def test_ready_returns_503_when_nats_disconnected(self) -> None:
-        client = _build_client_disconnected()
+    def test_ready_returns_503_when_nats_disconnected(self, make_test_client) -> None:
+        client = make_test_client(connected=False)
         response = client.get("/ready")
         assert response.status_code == 503
 
-    def test_ready_returns_ready_false_when_disconnected(self) -> None:
-        client = _build_client_disconnected()
+    def test_ready_returns_ready_false_when_disconnected(self, make_test_client) -> None:
+        client = make_test_client(connected=False)
         body = client.get("/ready").json()
         assert body["ready"] is False
 
-    def test_ready_includes_reason_when_disconnected(self) -> None:
-        client = _build_client_disconnected()
+    def test_ready_includes_reason_when_disconnected(self, make_test_client) -> None:
+        client = make_test_client(connected=False)
         body = client.get("/ready").json()
         assert "reason" in body
 
 
 class TestWebhookEndpoint:
-    def test_valid_payload_returns_202(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_valid_payload_returns_202(
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
+    ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         payload = {
             "event": "agent.created",
             "data": {"host": "localhost", "name": "bot"},
@@ -326,9 +282,11 @@ class TestWebhookEndpoint:
         assert isinstance(body["request_id"], str)
         assert len(body["request_id"]) > 0
 
-    def test_webhook_invalid_payload_returns_422(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_webhook_invalid_payload_returns_422(
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
+    ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         body_bytes = json.dumps({"bad": "payload"}).encode()
         response = client.post(
             "/webhook",
@@ -340,9 +298,11 @@ class TestWebhookEndpoint:
         )
         assert response.status_code == 422
 
-    def test_webhook_missing_body_returns_422(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_webhook_missing_body_returns_422(
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
+    ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         body_bytes = b"not json"
         response = client.post(
             "/webhook",
@@ -354,9 +314,11 @@ class TestWebhookEndpoint:
         )
         assert response.status_code == 422
 
-    def test_webhook_returns_event_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_webhook_returns_event_name(
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
+    ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         payload = {
             "event": "task.updated",
             "data": {"team_id": "t1", "task_id": "task-1"},
@@ -374,9 +336,11 @@ class TestWebhookEndpoint:
         body = response.json()
         assert body["event"] == "task.updated"
 
-    def test_webhook_bad_signature_returns_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_webhook_bad_signature_returns_401(
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
+    ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         payload = {
             "event": "agent.created",
             "data": {"host": "localhost", "name": "bot"},
@@ -394,12 +358,12 @@ class TestWebhookEndpoint:
         assert response.status_code == 401
 
     def test_invalid_signature_increments_failed_counter(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
     ) -> None:
         from prometheus_client import REGISTRY
 
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         labels = {"reason": "invalid_signature"}
         before = REGISTRY.get_sample_value("hermes_webhooks_failed_total", labels) or 0.0
         payload = {
@@ -420,21 +384,10 @@ class TestWebhookEndpoint:
         after = REGISTRY.get_sample_value("hermes_webhooks_failed_total", labels) or 0.0
         assert after > before
 
-    def test_webhook_publish_timeout_returns_503(self) -> None:
-        from hermes.server import app
-        from hermes.publisher import Publisher
-
-        mock_publisher = MagicMock(spec=Publisher)
-        mock_publisher.is_connected = True
-        mock_publisher.active_subjects = []
-        mock_publisher.publish = AsyncMock(side_effect=asyncio.TimeoutError())
-        app.state.publisher = mock_publisher
-
-        from hermes.config import Settings, get_settings
-
-        app.dependency_overrides[get_settings] = lambda: Settings(webhook_secret=TEST_SECRET)
-
-        client = TestClient(app, raise_server_exceptions=False)
+    def test_webhook_publish_timeout_returns_503(self, make_test_client) -> None:
+        client = make_test_client(
+            publish_side_effect=asyncio.TimeoutError(), raise_server_exceptions=False
+        )
         payload = {
             "event": "agent.created",
             "data": {"host": "h", "name": "n"},
@@ -457,10 +410,10 @@ class TestSignatureValidation:
     """Tests for _verify_signature behaviour (issue #156)."""
 
     def test_missing_signature_header_returns_401_when_secret_configured(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
     ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         payload = {
             "event": "agent.created",
             "data": {"host": "localhost", "name": "bot"},
@@ -470,10 +423,10 @@ class TestSignatureValidation:
         assert response.status_code == 401
 
     def test_empty_signature_header_returns_401_when_secret_configured(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
     ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         payload = {
             "event": "agent.created",
             "data": {"host": "localhost", "name": "bot"},
@@ -491,10 +444,10 @@ class TestSignatureValidation:
 class TestRequestIDMiddleware:
     """Tests for X-Request-ID header sanitization (issue #229)."""
 
-    def test_valid_uuid_request_id_is_passed_through(self) -> None:
+    def test_valid_uuid_request_id_is_passed_through(self, make_test_client) -> None:
         import uuid as uuid_mod
 
-        client = _build_client()
+        client = make_test_client()
         valid_id = str(uuid_mod.uuid4())
         payload = {
             "event": "agent.created",
@@ -514,10 +467,10 @@ class TestRequestIDMiddleware:
         assert response.headers.get("X-Request-ID") == valid_id
         assert response.json()["request_id"] == valid_id
 
-    def test_invalid_chars_in_request_id_are_replaced_with_uuid(self) -> None:
+    def test_invalid_chars_in_request_id_are_replaced_with_uuid(self, make_test_client) -> None:
         import uuid as uuid_mod
 
-        client = _build_client()
+        client = make_test_client()
         invalid_id = "bad<>id\ninjection"
         payload = {
             "event": "agent.created",
@@ -538,10 +491,10 @@ class TestRequestIDMiddleware:
         assert returned_id != invalid_id
         uuid_mod.UUID(returned_id)  # raises ValueError if not a valid UUID
 
-    def test_absent_request_id_header_generates_uuid(self) -> None:
+    def test_absent_request_id_header_generates_uuid(self, make_test_client) -> None:
         import uuid as uuid_mod
 
-        client = _build_client()
+        client = make_test_client()
         payload = {
             "event": "agent.created",
             "data": {"host": "localhost", "name": "bot"},
@@ -560,10 +513,10 @@ class TestRequestIDMiddleware:
         assert returned_id is not None
         uuid_mod.UUID(returned_id)  # raises ValueError if not a valid UUID
 
-    def test_oversized_request_id_is_replaced_with_uuid(self) -> None:
+    def test_oversized_request_id_is_replaced_with_uuid(self, make_test_client) -> None:
         import uuid as uuid_mod
 
-        client = _build_client()
+        client = make_test_client()
         oversized_id = "a" * 129
         payload = {
             "event": "agent.created",
@@ -594,8 +547,8 @@ class TestSettings:
 
 
 class TestPayloadSizeLimit:
-    def test_oversized_content_length_returns_413(self) -> None:
-        client = _build_client()
+    def test_oversized_content_length_returns_413(self, make_test_client) -> None:
+        client = make_test_client()
         body_bytes = b"x" * 100
         response = client.post(
             "/webhook",
@@ -608,8 +561,8 @@ class TestPayloadSizeLimit:
         )
         assert response.status_code == 413
 
-    def test_oversized_body_returns_413(self) -> None:
-        client = _build_client()
+    def test_oversized_body_returns_413(self, make_test_client) -> None:
+        client = make_test_client()
         body_bytes = b"x" * (1_048_576 + 1)
         response = client.post(
             "/webhook",
@@ -621,9 +574,9 @@ class TestPayloadSizeLimit:
         )
         assert response.status_code == 413
 
-    def test_exact_limit_body_accepted(self) -> None:
+    def test_exact_limit_body_accepted(self, make_test_client) -> None:
         """A body exactly at the limit must not be rejected with 413."""
-        client = _build_client()
+        client = make_test_client()
         body_bytes = b"x" * 1_048_576
         response = client.post(
             "/webhook",
@@ -653,10 +606,12 @@ class TestPayloadSizeLimit:
         assert tc.post("/", content=b"x" * 10).status_code == 200
         assert tc.post("/", content=b"x" * 11).status_code == 413
 
-    def test_oversized_content_length_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_oversized_content_length_logs_warning(
+        self, caplog: pytest.LogCaptureFixture, make_test_client
+    ) -> None:
         import logging
 
-        client = _build_client()
+        client = make_test_client()
         with caplog.at_level(logging.WARNING, logger="hermes.middleware"):
             client.post(
                 "/webhook",
@@ -669,10 +624,12 @@ class TestPayloadSizeLimit:
             )
         assert any("2000000" in r.message and "1048576" in r.message for r in caplog.records)
 
-    def test_oversized_body_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_oversized_body_logs_warning(
+        self, caplog: pytest.LogCaptureFixture, make_test_client
+    ) -> None:
         import logging
 
-        client = _build_client()
+        client = make_test_client()
         body_bytes = b"x" * (1_048_576 + 1)
         with caplog.at_level(logging.WARNING, logger="hermes.middleware"):
             client.post(
@@ -1058,30 +1015,27 @@ class TestPublisherDrainDeadLetters:
 
 
 class TestSubjectsEndpoint:
-    def test_subjects_returns_list(self) -> None:
-        client = _build_client()
+    def test_subjects_returns_list(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/subjects").json()
         assert "subjects" in body
         assert isinstance(body["subjects"], list)
 
-    def test_subjects_rate_limit_returns_429_when_limit_exceeded(self) -> None:
-        from hermes.rate_limit import limiter
-
-        limiter._storage.reset()  # type: ignore[attr-defined]
-        client = _build_client()
+    def test_subjects_rate_limit_returns_429_when_limit_exceeded(self, make_test_client) -> None:
+        client = make_test_client()
         for _ in range(60):
             client.get("/subjects")
         resp = client.get("/subjects")
         assert resp.status_code == 429
 
-    def test_subjects_includes_hermes_public_url(self) -> None:
-        client = _build_client()
+    def test_subjects_includes_hermes_public_url(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/subjects").json()
         assert "hermes_public_url" in body
         assert isinstance(body["hermes_public_url"], str)
 
-    def test_subjects_includes_active_subjects_max(self) -> None:
-        client = _build_client()
+    def test_subjects_includes_active_subjects_max(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/subjects").json()
         assert "active_subjects_max" in body
         assert isinstance(body["active_subjects_max"], int)
@@ -1090,10 +1044,10 @@ class TestSubjectsEndpoint:
 
 class TestWWWAuthenticate:
     def test_bad_signature_401_has_www_authenticate_header(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, make_test_client
     ) -> None:
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         payload = {
             "event": "agent.created",
             "data": {"host": "localhost", "name": "bot"},
@@ -1115,13 +1069,13 @@ class TestWWWAuthenticate:
 
 
 class TestVersionEndpoint:
-    def test_version_returns_200(self) -> None:
-        client = _build_client()
+    def test_version_returns_200(self, make_test_client) -> None:
+        client = make_test_client()
         resp = client.get("/version")
         assert resp.status_code == 200
 
-    def test_version_body_has_version_key(self) -> None:
-        client = _build_client()
+    def test_version_body_has_version_key(self, make_test_client) -> None:
+        client = make_test_client()
         data = client.get("/version").json()
         assert "version" in data
         assert isinstance(data["version"], str)
@@ -1131,49 +1085,49 @@ class TestVersionEndpoint:
 class TestEventsEndpoint:
     """Tests for GET /events — validates response against AGENT_EVENTS and TASK_EVENTS (#127)."""
 
-    def test_events_returns_200(self) -> None:
-        client = _build_client()
+    def test_events_returns_200(self, make_test_client) -> None:
+        client = make_test_client()
         resp = client.get("/events")
         assert resp.status_code == 200
 
-    def test_events_response_has_agent_events_key(self) -> None:
-        client = _build_client()
+    def test_events_response_has_agent_events_key(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/events").json()
         assert "agent_events" in body
 
-    def test_events_response_has_task_events_key(self) -> None:
-        client = _build_client()
+    def test_events_response_has_task_events_key(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/events").json()
         assert "task_events" in body
 
-    def test_events_response_has_all_events_key(self) -> None:
-        client = _build_client()
+    def test_events_response_has_all_events_key(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/events").json()
         assert "all_events" in body
 
-    def test_events_agent_events_matches_publisher_constant(self) -> None:
+    def test_events_agent_events_matches_publisher_constant(self, make_test_client) -> None:
         from hermes.publisher import AGENT_EVENTS
 
-        client = _build_client()
+        client = make_test_client()
         body = client.get("/events").json()
         assert set(body["agent_events"]) == AGENT_EVENTS
 
-    def test_events_task_events_matches_publisher_constant(self) -> None:
+    def test_events_task_events_matches_publisher_constant(self, make_test_client) -> None:
         from hermes.publisher import TASK_EVENTS
 
-        client = _build_client()
+        client = make_test_client()
         body = client.get("/events").json()
         assert set(body["task_events"]) == TASK_EVENTS
 
-    def test_events_all_events_is_union_of_agent_and_task(self) -> None:
+    def test_events_all_events_is_union_of_agent_and_task(self, make_test_client) -> None:
         from hermes.publisher import AGENT_EVENTS, TASK_EVENTS
 
-        client = _build_client()
+        client = make_test_client()
         body = client.get("/events").json()
         assert set(body["all_events"]) == AGENT_EVENTS | TASK_EVENTS
 
-    def test_events_lists_are_sorted(self) -> None:
-        client = _build_client()
+    def test_events_lists_are_sorted(self, make_test_client) -> None:
+        client = make_test_client()
         body = client.get("/events").json()
         assert body["agent_events"] == sorted(body["agent_events"])
         assert body["task_events"] == sorted(body["task_events"])
@@ -1181,8 +1135,8 @@ class TestEventsEndpoint:
 
 
 class TestTimestampValidation:
-    def test_webhook_naive_timestamp_rejected(self) -> None:
-        client = _build_client()
+    def test_webhook_naive_timestamp_rejected(self, make_test_client) -> None:
+        client = make_test_client()
         payload = {
             "event": "agent.created",
             "data": {"host": "h", "name": "n"},
@@ -1199,8 +1153,8 @@ class TestTimestampValidation:
         )
         assert response.status_code == 422
 
-    def test_webhook_aware_timestamp_accepted(self) -> None:
-        client = _build_client()
+    def test_webhook_aware_timestamp_accepted(self, make_test_client) -> None:
+        client = make_test_client()
         payload = {
             "event": "agent.created",
             "data": {"host": "h", "name": "n"},
@@ -1349,13 +1303,13 @@ class TestExceptionDetailNotLeaked:
     """Issue #158 — internal exception detail must not appear in response body."""
 
     def test_invalid_payload_response_has_no_traceback(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, make_test_client
     ) -> None:
         """422 response body must only contain 'detail', no stack trace or internal info."""
         import logging
 
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         body_bytes = json.dumps({"bad": "payload"}).encode()
 
         with caplog.at_level(logging.WARNING):
@@ -1375,13 +1329,13 @@ class TestExceptionDetailNotLeaked:
         assert "detail" in response.json()
 
     def test_invalid_payload_emits_warning_log(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, make_test_client
     ) -> None:
         """A WARNING-level log must be emitted when the webhook payload is invalid."""
         import logging
 
         monkeypatch.setenv("WEBHOOK_SECRET", TEST_SECRET)
-        client = _build_client()
+        client = make_test_client()
         body_bytes = json.dumps({"bad": "payload"}).encode()
 
         with caplog.at_level(logging.WARNING, logger="hermes"):
