@@ -26,3 +26,4 @@ build/
 .coverage
 coverage*.xml
 htmlcov/
+.claude-followup-*.md
