@@ -5,8 +5,6 @@ import re
 import tomllib
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parent.parent.parent
 LOCK = ROOT / "requirements.lock.txt"
 PYPROJECT = ROOT / "pyproject.toml"
@@ -19,7 +17,7 @@ def _direct_prod_names() -> set[str]:
     data = tomllib.loads(PYPROJECT.read_text())
     out = set()
     for entry in data["project"]["dependencies"]:
-        name = re.split(r"[\[<>=! ;]", entry, 1)[0]
+        name = re.split(r"[\[<>=! ;]", entry, maxsplit=1)[0]
         out.add(re.sub(r"[-_.]+", "-", name).lower())
     return out
 
@@ -42,7 +40,6 @@ def test_every_pin_has_a_hash() -> None:
 
 
 def test_every_direct_prod_dep_is_pinned() -> None:
-    body = LOCK.read_text().lower()
     pinned = {
         re.sub(r"[-_.]+", "-", m["name"]).lower()
         for m in PIN_RE.finditer(LOCK.read_text())
