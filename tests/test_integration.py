@@ -775,6 +775,76 @@ class TestReconnectBackoffIntegration:
 
 
 # ---------------------------------------------------------------------------
+# Issue #447 — reconnect loop fires after NATS connection is closed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestReconnectLoopFiresAfterClose:
+    """End-to-end: close the underlying NATS client and assert the production
+    background reconnect loop recovers, flipping _connected back to True and
+    incrementing reconnect_count.
+
+    Complements the mocked unit tests in tests/test_publisher_reconnect.py
+    by exercising real nats-py state transitions (disconnected_cb firing,
+    is_closed semantics under allow_reconnect=False) against a live server.
+    """
+
+    async def test_reconnect_loop_recovers_after_nc_close(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        nats_url: str,
+    ) -> None:
+        # Shrink the production loop interval so the test converges in seconds,
+        # not the 5s default. Must be set before Publisher() / connect() so the
+        # Settings LRU cache (cleared by the reset_settings autouse fixture)
+        # picks it up.
+        monkeypatch.setenv("NATS_RECONNECT_INTERVAL", "0.1")
+        monkeypatch.setenv("NATS_RECONNECT_MAX_INTERVAL", "0.2")
+        monkeypatch.setenv("NATS_RECONNECT_JITTER", "0.0")
+        monkeypatch.setenv("NATS_RECONNECT_HARD_TIMEOUT", "2.0")
+
+        pub = Publisher()
+        await pub.connect(nats_url)
+        try:
+            # (1) Sanity: connected, counter at zero, production loop running.
+            assert pub.is_connected
+            assert pub.reconnect_count == 0
+            assert pub.reconnect_loop_active is True
+
+            # (2) Force a real disconnect by closing the underlying NATS client.
+            #     With allow_reconnect=False (publisher.py:159), close() drives
+            #     is_closed=True and triggers disconnected_cb, which clears
+            #     pub._connected (publisher.py:141).
+            assert pub._nc is not None
+            await pub._nc.close()
+
+            # (3) Wait for _connected to flip to False (callback-driven).
+            async def _wait_disconnected() -> None:
+                while pub._connected:
+                    await asyncio.sleep(0.05)
+
+            await asyncio.wait_for(_wait_disconnected(), timeout=5.0)
+            assert not pub._connected, "disconnected_cb never cleared _connected"
+            assert pub._nc.is_closed
+
+            # (4) Wait for the production loop to observe is_closed and
+            #     successfully reconnect against the live server.
+            async def _wait_reconnected() -> None:
+                while pub.reconnect_count < 1:
+                    await asyncio.sleep(0.05)
+
+            await asyncio.wait_for(_wait_reconnected(), timeout=10.0)
+
+            # (5) Assert the contract from issue #447.
+            assert pub.reconnect_count >= 1
+            assert pub.is_connected
+            assert pub._nc is not None and not pub._nc.is_closed
+        finally:
+            await pub.disconnect()
+
+
+# ---------------------------------------------------------------------------
 # Issue #147 — lifespan abort / degraded state
 # ---------------------------------------------------------------------------
 
