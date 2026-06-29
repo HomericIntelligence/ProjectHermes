@@ -47,8 +47,20 @@ pip = ">=26.1,<27"
 pre-commit = ">=3.0,<5"
 pyyaml = ">=6.0,<7"
 
+[feature.lock.dependencies]
+# Python 3.12 to match the Dockerfile base image (python:3.12-slim).
+# Refreshing the lock against any other interpreter will produce wheels that
+# the Docker builder cannot install. See issue #354.
+python = ">=3.12,<3.13"
+
+[feature.lock.pypi-dependencies]
+# Pin pip-tools to a single minor so the regenerated lock file is byte-stable
+# across contributors. Bump in lockstep with pip in pyproject.toml.
+pip-tools = ">=7.4,<8"
+
 [environments]
 default = { features = ["dev"], solve-group = "default" }
+lock    = { features = ["lock"], no-default-feature = true }
 
 [tasks]
 start     = "just start"

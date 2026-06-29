@@ -126,6 +126,13 @@ dep-check:
 check-coverage-floors:
     pixi run python scripts/check_coverage_floors.py
 
+# Regenerate the hashed Docker requirements lock from pyproject.toml.
+# Runs under Python 3.12 (see [feature.lock] in pixi.toml) so wheels match
+# the python:3.12-slim image. Commit the resulting requirements.lock.txt.
+lock:
+    pixi run -e lock pip-compile --generate-hashes --resolver=backtracking \
+        --output-file=requirements.lock.txt pyproject.toml
+
 # Scan repository for leaked secrets (requires gitleaks binary)
 scan-secrets:
     #!/usr/bin/env bash

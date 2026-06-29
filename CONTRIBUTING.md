@@ -215,6 +215,19 @@ Notes:
 - The bounded version ranges in `pyproject.toml` (`>=X,<NEXT_MAJOR`) are honoured by both pip and
   pixi; reproducible CI uses `pixi install --locked` against `pixi.lock`.
 
+### Refreshing the Docker dependency lock
+
+The Docker image installs runtime dependencies from `requirements.lock.txt`
+(hashed, fully pinned). When you change `[project.dependencies]` in
+`pyproject.toml`, regenerate the lock:
+
+```bash
+just lock
+```
+
+Commit the resulting `requirements.lock.txt` in the same PR. CI fails the
+`deps-version-sync` job otherwise.
+
 ### Bumping the NATS Image Digest
 
 `docker-compose.yml` and the `integration-tests` job in `.github/workflows/_required.yml` both

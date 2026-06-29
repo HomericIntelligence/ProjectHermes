@@ -506,6 +506,28 @@ jobs:
             echo "OK: pixi.lock is clean"
           fi
 
+      - name: Setup pixi
+        uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11  # v0.9.6
+        with:
+          pixi-version: v0.68.0
+          cache: true
+
+      - name: Check requirements.lock.txt is up to date
+        # Regenerates the Docker lock from pyproject.toml and fails if it
+        # differs from the committed file. The lock must be refreshed in any PR
+        # that changes [project.dependencies]. Run `just lock` locally. See #354.
+        run: |
+          set -euo pipefail
+          pixi run -e lock pip-compile --generate-hashes --resolver=backtracking \
+              --output-file=requirements.lock.txt pyproject.toml
+          if ! git diff --exit-code -- requirements.lock.txt; then
+            echo "FAIL: requirements.lock.txt is stale."
+            echo "      Run: just lock"
+            echo "      then commit the regenerated requirements.lock.txt."
+            exit 1
+          fi
+          echo "OK: requirements.lock.txt is in sync with pyproject.toml."
+
   openapi-drift:
     name: openapi-drift
     runs-on: ubuntu-24.04
