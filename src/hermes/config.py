@@ -209,6 +209,10 @@ class Settings(BaseSettings):
           (e.g. ``0.0.0.0``, a specific public IP, or a FQDN), OR
         - ``hermes_public_url`` resolves to a host that is not loopback / 'localhost'
           (i.e. the operator configured a real externally-reachable URL).
+
+        This is the single source of truth for the HMAC-disabled production warning;
+        both the config-level validator and the server's lifespan notice gate on it so
+        the dedup boundary cannot drift across call sites.
         """
         if self._host_looks_public(self.hermes_host):
             return True
@@ -219,6 +223,17 @@ class Settings(BaseSettings):
             if public_host and self._host_looks_public(public_host):
                 return True
         return False
+
+    @property
+    def is_production_bind(self) -> bool:
+        """Single source of truth for the all-interfaces (``0.0.0.0``) binding heuristic.
+
+        Distinct from :meth:`_is_production_signal`: this property is specifically the
+        ``hermes_host == 0.0.0.0`` gate used by the TLS-verify warning and the server's
+        "binding to all interfaces" notice. The HMAC-disabled warning uses the broader
+        :meth:`_is_production_signal` (which also catches public IPs / FQDNs / public URLs).
+        """
+        return self.hermes_host == "0.0.0.0"
 
     @model_validator(mode="after")
     def _warn_hmac_disabled_in_production(self) -> "Settings":
@@ -251,7 +266,7 @@ class Settings(BaseSettings):
         which is the conventional deployment binding.  This is a defence-in-depth guard; the
         authoritative production signal is the operator's configuration management.
         """
-        if not self.tls_verify and self.hermes_host == "0.0.0.0":
+        if not self.tls_verify and self.is_production_bind:
             _config_logger.warning(
                 "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
                 "  TLS_VERIFY=false IS SET WHILE HERMES_HOST=0.0.0.0 (PRODUCTION)\n"

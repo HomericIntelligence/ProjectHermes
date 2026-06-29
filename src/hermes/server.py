@@ -158,16 +158,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     setup_logging(json_format=settings.log_json)
 
-    # Production (HERMES_HOST=0.0.0.0) HMAC-disabled warnings are emitted by
-    # Settings._warn_hmac_disabled_in_production in config.py. Here we cover
-    # the dev/test case (e.g. 127.0.0.1) so operators still see one notice.
-    if not settings.webhook_secret and settings.hermes_host != "0.0.0.0":
+    # Production HMAC-disabled warnings are emitted by
+    # Settings._warn_hmac_disabled_in_production in config.py, gated on the broad
+    # _is_production_signal() heuristic (0.0.0.0, public IP, FQDN, or public URL).
+    # Here we cover ONLY the dev/test case (e.g. 127.0.0.1) so operators still see
+    # exactly one notice — gating on the same signal avoids a duplicate warning.
+    if not settings.webhook_secret and not settings._is_production_signal():
         logger.warning(
             "HMAC webhook validation is DISABLED — set WEBHOOK_SECRET to enable signature verification",
             extra={"hmac_enabled": False},
         )
 
-    if settings.hermes_host == "0.0.0.0":
+    if settings.is_production_bind:
         logger.warning("Server binding to 0.0.0.0 exposes all network interfaces")
 
     _log_startup_banner(publisher, settings)
