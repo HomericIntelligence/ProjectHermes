@@ -239,6 +239,7 @@ class Settings(BaseSettings):
                 "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
                 self.hermes_host,
                 self.hermes_public_url,
+                extra={"hmac_enabled": False},
             )
         return self
 

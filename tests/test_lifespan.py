@@ -242,9 +242,10 @@ async def test_last_retry_logs_giving_up_not_retrying(mock_publisher: MagicMock)
 async def test_lifespan_warns_when_webhook_secret_unset(
     mock_publisher: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When WEBHOOK_SECRET is unset, lifespan must log the HMAC-disabled warning (#516)."""
+    """When WEBHOOK_SECRET is unset on a non-production host, lifespan logs the HMAC-disabled warning (#515, #516)."""
     monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
     monkeypatch.setenv("WEBHOOK_SECRET", "")
+    monkeypatch.setenv("HERMES_HOST", "127.0.0.1")
     from hermes.config import get_settings
     from hermes.server import lifespan, app
 
@@ -261,5 +262,33 @@ async def test_lifespan_warns_when_webhook_secret_unset(
     assert any("HMAC webhook validation is DISABLED" in msg for msg in warning_messages), (
         f"expected HMAC-disabled warning, got: {warning_messages!r}"
     )
+
+    get_settings.cache_clear()  # type: ignore[attr-defined]
+
+
+@pytest.mark.anyio
+async def test_lifespan_does_not_duplicate_hmac_warning_in_production(
+    mock_publisher: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On HERMES_HOST=0.0.0.0, the config validator owns the warning; lifespan must NOT also emit it (#515)."""
+    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+    monkeypatch.setenv("WEBHOOK_SECRET", "")
+    monkeypatch.setenv("HERMES_HOST", "0.0.0.0")
+    from hermes.config import get_settings
+    from hermes.server import lifespan, app
+
+    get_settings.cache_clear()  # type: ignore[attr-defined]
+
+    with (
+        patch("hermes.server.Publisher", return_value=mock_publisher),
+        patch("hermes.server.logger") as mock_logger,
+    ):
+        async with lifespan(app):
+            pass
+
+    warning_messages = [c.args[0] for c in mock_logger.warning.call_args_list if c.args]
+    assert not any(
+        "HMAC webhook validation is DISABLED" in msg for msg in warning_messages
+    ), f"lifespan must not duplicate the config-level HMAC warning, got: {warning_messages!r}"
 
     get_settings.cache_clear()  # type: ignore[attr-defined]
