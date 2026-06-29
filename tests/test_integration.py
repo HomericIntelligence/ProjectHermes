@@ -819,13 +819,11 @@ class TestReconnectLoopFiresAfterClose:
             assert pub._nc is not None
             await pub._nc.close()
 
-            # (3) Wait for _connected to flip to False (callback-driven).
-            async def _wait_disconnected() -> None:
-                while pub._connected:
-                    await asyncio.sleep(0.05)
-
-            await asyncio.wait_for(_wait_disconnected(), timeout=5.0)
-            assert not pub._connected, "disconnected_cb never cleared _connected"
+            # (3) Verify the underlying client is closed (deterministic on explicit close()).
+            #     The production reconnect loop keys off _nc.is_closed (publisher.py:206),
+            #     not _connected, so we gate here on the same condition.
+            #     disconnected_cb may be suppressed on user-initiated close() in some
+            #     nats-py versions — polling _connected would be a flake source.
             assert pub._nc.is_closed
 
             # (4) Wait for the production loop to observe is_closed and
