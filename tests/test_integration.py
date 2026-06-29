@@ -782,12 +782,15 @@ class TestReconnectBackoffIntegration:
 @pytest.mark.integration
 class TestReconnectLoopFiresAfterClose:
     """End-to-end: close the underlying NATS client and assert the production
-    background reconnect loop recovers, flipping _connected back to True and
-    incrementing reconnect_count.
+    background reconnect loop recovers and increments reconnect_count.
+
+    Disconnection is verified via `_nc.is_closed` (deterministic after an explicit
+    close()) rather than polling `_connected` (callback-driven, may be suppressed
+    on user-initiated close in some nats-py versions).
 
     Complements the mocked unit tests in tests/test_publisher_reconnect.py
-    by exercising real nats-py state transitions (disconnected_cb firing,
-    is_closed semantics under allow_reconnect=False) against a live server.
+    by exercising real nats-py state transitions (is_closed semantics under
+    allow_reconnect=False) against a live server.
     """
 
     async def test_reconnect_loop_recovers_after_nc_close(
