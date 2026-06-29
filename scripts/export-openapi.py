@@ -48,10 +48,14 @@ def main() -> None:
         import yaml  # type: ignore[import-untyped]  # PyYAML — transitive dep; no stubs.
 
         with open(output, "w", encoding="utf-8") as f:
-            yaml.safe_dump(spec, f, sort_keys=False)
+            # sort_keys=True keeps output deterministic across FastAPI / Python
+            # dict-insertion-order changes; required by the openapi-drift CI check (#431).
+            yaml.safe_dump(spec, f, sort_keys=True)
     else:
         with open(output, "w", encoding="utf-8") as f:
-            json.dump(spec, f, indent=2)
+            # sort_keys=True keeps output deterministic across FastAPI / Python
+            # dict-insertion-order changes; required by the openapi-drift CI check (#431).
+            json.dump(spec, f, indent=2, sort_keys=True)
             f.write("\n")
 
     print(f"OpenAPI spec written to {output}")

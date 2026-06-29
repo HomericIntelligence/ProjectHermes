@@ -1,247 +1,407 @@
 {
-  "openapi": "3.1.0",
+  "components": {
+    "schemas": {
+      "DeadLettersResponse": {
+        "description": "Response body for GET /dead-letters (paginated).",
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "offset",
+          "limit",
+          "items"
+        ],
+        "title": "DeadLettersResponse",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "Standard error response body.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "description": "Response body for GET /health.",
+        "properties": {
+          "consecutive_reconnect_failures": {
+            "default": 0,
+            "title": "Consecutive Reconnect Failures",
+            "type": "integer"
+          },
+          "dead_letter_api_key_configured": {
+            "default": false,
+            "title": "Dead Letter Api Key Configured",
+            "type": "boolean"
+          },
+          "dead_letter_count": {
+            "default": 0,
+            "title": "Dead Letter Count",
+            "type": "integer"
+          },
+          "dead_letter_queue_alert_threshold_pct": {
+            "default": 0.0,
+            "title": "Dead Letter Queue Alert Threshold Pct",
+            "type": "number"
+          },
+          "dead_letter_queue_capacity": {
+            "default": 0,
+            "title": "Dead Letter Queue Capacity",
+            "type": "integer"
+          },
+          "dead_letter_queue_depth": {
+            "default": 0,
+            "title": "Dead Letter Queue Depth",
+            "type": "integer"
+          },
+          "hermes_public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hermes Public Url"
+          },
+          "hmac_validation_enabled": {
+            "default": false,
+            "title": "Hmac Validation Enabled",
+            "type": "boolean"
+          },
+          "inflight_requests": {
+            "default": 0,
+            "title": "Inflight Requests",
+            "type": "integer"
+          },
+          "last_reconnect_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reconnect Attempt At"
+          },
+          "nats_connected": {
+            "title": "Nats Connected",
+            "type": "boolean"
+          },
+          "nats_last_error": {
+            "default": "",
+            "title": "Nats Last Error",
+            "type": "string"
+          },
+          "nats_reconnect_count": {
+            "default": 0,
+            "title": "Nats Reconnect Count",
+            "type": "integer"
+          },
+          "nats_reconnect_jitter": {
+            "default": 0.5,
+            "title": "Nats Reconnect Jitter",
+            "type": "number"
+          },
+          "nats_reconnect_loop_active": {
+            "default": false,
+            "title": "Nats Reconnect Loop Active",
+            "type": "boolean"
+          },
+          "nats_reconnect_max_interval": {
+            "default": 60.0,
+            "title": "Nats Reconnect Max Interval",
+            "type": "number"
+          },
+          "nats_retry_attempts": {
+            "default": 3,
+            "title": "Nats Retry Attempts",
+            "type": "integer"
+          },
+          "nats_retry_interval": {
+            "default": 5.0,
+            "title": "Nats Retry Interval",
+            "type": "number"
+          },
+          "shutting_down": {
+            "default": false,
+            "title": "Shutting Down",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "timeouts": {
+            "$ref": "#/components/schemas/TimeoutSettings"
+          }
+        },
+        "required": [
+          "status",
+          "nats_connected",
+          "timeouts"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "SubjectsResponse": {
+        "description": "Response body for GET /subjects.",
+        "properties": {
+          "active_subjects_max": {
+            "default": 0,
+            "title": "Active Subjects Max",
+            "type": "integer"
+          },
+          "hermes_public_url": {
+            "default": "",
+            "title": "Hermes Public Url",
+            "type": "string"
+          },
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Subjects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "subjects"
+        ],
+        "title": "SubjectsResponse",
+        "type": "object"
+      },
+      "TimeoutSettings": {
+        "description": "Timeout values (seconds) surfaced in /health for observability.",
+        "properties": {
+          "nats_connect": {
+            "title": "Nats Connect",
+            "type": "number"
+          },
+          "nats_publish": {
+            "title": "Nats Publish",
+            "type": "number"
+          }
+        },
+        "required": [
+          "nats_connect",
+          "nats_publish"
+        ],
+        "title": "TimeoutSettings",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VersionResponse": {
+        "description": "Response body for GET /version.",
+        "properties": {
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionResponse",
+        "type": "object"
+      },
+      "WebhookAcceptedResponse": {
+        "description": "Response body for POST /webhook (202 Accepted).",
+        "properties": {
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "event",
+          "request_id"
+        ],
+        "title": "WebhookAcceptedResponse",
+        "type": "object"
+      }
+    }
+  },
   "info": {
-    "title": "ProjectHermes",
     "description": "Bridges external webhooks to NATS JetStream.",
+    "title": "ProjectHermes",
     "version": "0.1.0"
   },
+  "openapi": "3.1.0",
   "paths": {
-    "/health": {
-      "get": {
-        "summary": "Health probe",
-        "description": "Return service health, NATS connection status, dead-letter queue depth, shutdown state, and reconnect timing. Returns 503 when NATS is disconnected so load balancers can route around the degraded instance.",
-        "operationId": "health_health_get",
+    "/dead-letters": {
+      "delete": {
+        "description": "Drain (clear) the in-memory dead-letter queue and return the count of drained items.",
+        "operationId": "drain_dead_letters_dead_letters_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-dead-letter-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Dead-Letter-Key",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                },
                 "example": {
-                  "status": "ok",
-                  "nats_connected": true,
-                  "shutting_down": false,
-                  "hmac_validation_enabled": true,
-                  "inflight_requests": 0,
-                  "dead_letter_count": 0,
-                  "dead_letter_queue_depth": 0,
-                  "dead_letter_queue_capacity": 1000,
-                  "dead_letter_queue_alert_threshold_pct": 0.0,
-                  "timeouts": {
-                    "nats_connect": 5.0,
-                    "nats_publish": 5.0
+                  "drained": 1
+                },
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
                   },
-                  "nats_reconnect_count": 0,
-                  "nats_last_error": "",
-                  "nats_retry_attempts": 3,
-                  "nats_retry_interval": 5.0,
-                  "consecutive_reconnect_failures": 0,
-                  "reconnect_loop_running": false
+                  "title": "Response Drain Dead Letters Dead Letters Delete",
+                  "type": "object"
                 }
               }
-            }
-          },
-          "503": {
-            "description": "NATS not reachable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/version": {
-      "get": {
-        "summary": "Version",
-        "description": "Return the installed package version.",
-        "operationId": "get_version_version_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VersionResponse"
-                },
-                "example": {
-                  "version": "0.1.0"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ready": {
-      "get": {
-        "summary": "Readiness probe",
-        "description": "Check if the service is ready to accept requests. Returns 503 when NATS is not connected.",
-        "operationId": "ready_ready_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Ready Ready Get"
-                },
-                "example": {
-                  "ready": true
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "NATS not connected",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/webhook": {
-      "post": {
-        "summary": "Receive webhook",
-        "description": "Receive an external webhook, validate its HMAC signature, parse the payload, and publish the event to NATS JetStream. Returns 202 on acceptance; signature/payload/connectivity failures map to 401/422/503.",
-        "operationId": "receive_webhook_webhook_post",
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WebhookAcceptedResponse"
-                },
-                "example": {
-                  "status": "accepted",
-                  "event": "agent.registered",
-                  "request_id": "01HZ0000000000000000000000"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid webhook signature",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            },
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Malformed or invalid payload",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "NATS publisher not connected",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            },
+            "description": "Validation Error"
           }
-        }
-      }
-    },
-    "/subjects": {
+        },
+        "summary": "Drain dead letters"
+      },
       "get": {
-        "summary": "List subjects",
-        "description": "Return the list of NATS subjects that have been published to.",
-        "operationId": "list_subjects_subjects_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubjectsResponse"
-                },
-                "example": {
-                  "subjects": [
-                    "hi.agents.host1.agent1.registered",
-                    "hi.tasks.team1.task1.created"
-                  ],
-                  "hermes_public_url": "http://localhost:8080",
-                  "active_subjects_max": 100
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/metrics": {
-      "get": {
-        "summary": "Prometheus metrics",
-        "description": "Expose Prometheus exposition-format metrics for all webhook and NATS counters.",
-        "operationId": "metrics_metrics_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              },
-              "text/plain; version=0.0.4; charset=utf-8": {
-                "example": "# HELP hermes_webhooks_received_total Total webhooks received\n# TYPE hermes_webhooks_received_total counter\nhermes_webhooks_received_total{event_type=\"agent.registered\"} 0\n"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/dead-letters": {
-      "get": {
-        "summary": "Get dead letters",
         "description": "Return the in-memory dead-letter queue with optional pagination.",
         "operationId": "dead_letters_dead_letters_get",
         "parameters": [
           {
-            "name": "offset",
             "in": "query",
+            "name": "offset",
             "required": false,
             "schema": {
-              "type": "integer",
               "default": 0,
-              "title": "Offset"
+              "title": "Offset",
+              "type": "integer"
             }
           },
           {
-            "name": "limit",
             "in": "query",
+            "name": "limit",
             "required": false,
             "schema": {
               "anyOf": [
@@ -256,111 +416,76 @@
             }
           },
           {
-            "name": "x-dead-letter-key",
             "in": "header",
+            "name": "x-dead-letter-key",
             "required": false,
             "schema": {
-              "type": "string",
               "default": "",
-              "title": "X-Dead-Letter-Key"
+              "title": "X-Dead-Letter-Key",
+              "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeadLettersResponse"
-                },
                 "example": {
-                  "total": 1,
-                  "offset": 0,
-                  "limit": 100,
                   "items": [
                     {
-                      "subject": "hi.agents.host1.agent1.unknown_event",
                       "payload": {
-                        "event": "unknown_event",
-                        "data": {}
+                        "data": {},
+                        "event": "unknown_event"
                       },
+                      "subject": "hi.agents.host1.agent1.unknown_event",
                       "timestamp": "2026-06-04T12:00:00Z"
                     }
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "summary": "Drain dead letters",
-        "description": "Drain (clear) the in-memory dead-letter queue and return the count of drained items.",
-        "operationId": "drain_dead_letters_dead_letters_delete",
-        "parameters": [
-          {
-            "name": "x-dead-letter-key",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "",
-              "title": "X-Dead-Letter-Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
-                  "title": "Response Drain Dead Letters Dead Letters Delete"
+                  ],
+                  "limit": 100,
+                  "offset": 0,
+                  "total": 1
                 },
-                "example": {
-                  "drained": 1
+                "schema": {
+                  "$ref": "#/components/schemas/DeadLettersResponse"
                 }
               }
-            }
+            },
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
-            }
+            },
+            "description": "Validation Error"
           }
-        }
+        },
+        "summary": "Get dead letters"
       }
     },
     "/events": {
       "get": {
-        "summary": "List events",
         "description": "Return the canonical set of supported webhook event types.",
         "operationId": "list_events_events_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
             "content": {
               "application/json": {
+                "example": {
+                  "agent_events": [
+                    "agent.registered"
+                  ],
+                  "all_events": [
+                    "agent.registered",
+                    "task.created"
+                  ],
+                  "task_events": [
+                    "task.created"
+                  ]
+                },
                 "schema": {
                   "additionalProperties": {
                     "items": {
@@ -368,347 +493,232 @@
                     },
                     "type": "array"
                   },
-                  "type": "object",
-                  "title": "Response List Events Events Get"
-                },
-                "example": {
-                  "agent_events": [
-                    "agent.registered"
-                  ],
-                  "task_events": [
-                    "task.created"
-                  ],
-                  "all_events": [
-                    "agent.registered",
-                    "task.created"
-                  ]
+                  "title": "Response List Events Events Get",
+                  "type": "object"
                 }
               }
-            }
+            },
+            "description": "Successful Response"
           }
-        }
+        },
+        "summary": "List events"
       }
-    }
-  },
-  "components": {
-    "schemas": {
-      "DeadLettersResponse": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "offset": {
-            "type": "integer",
-            "title": "Offset"
-          },
-          "limit": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit"
-          },
-          "items": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Items"
-          }
-        },
-        "type": "object",
-        "required": [
-          "total",
-          "offset",
-          "limit",
-          "items"
-        ],
-        "title": "DeadLettersResponse",
-        "description": "Response body for GET /dead-letters (paginated)."
-      },
-      "ErrorResponse": {
-        "properties": {
-          "detail": {
-            "type": "string",
-            "title": "Detail"
-          },
-          "request_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Request Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "detail"
-        ],
-        "title": "ErrorResponse",
-        "description": "Standard error response body."
-      },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
-      "HealthResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "nats_connected": {
-            "type": "boolean",
-            "title": "Nats Connected"
-          },
-          "shutting_down": {
-            "type": "boolean",
-            "title": "Shutting Down",
-            "default": false
-          },
-          "hmac_validation_enabled": {
-            "type": "boolean",
-            "title": "Hmac Validation Enabled",
-            "default": false
-          },
-          "dead_letter_api_key_configured": {
-            "type": "boolean",
-            "title": "Dead Letter Api Key Configured",
-            "default": false
-          },
-          "hermes_public_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hermes Public Url"
-          },
-          "inflight_requests": {
-            "type": "integer",
-            "title": "Inflight Requests",
-            "default": 0
-          },
-          "dead_letter_count": {
-            "type": "integer",
-            "title": "Dead Letter Count",
-            "default": 0
-          },
-          "dead_letter_queue_depth": {
-            "type": "integer",
-            "title": "Dead Letter Queue Depth",
-            "default": 0
-          },
-          "dead_letter_queue_capacity": {
-            "type": "integer",
-            "title": "Dead Letter Queue Capacity",
-            "default": 0
-          },
-          "dead_letter_queue_alert_threshold_pct": {
-            "type": "number",
-            "title": "Dead Letter Queue Alert Threshold Pct",
-            "default": 0.0
-          },
-          "timeouts": {
-            "$ref": "#/components/schemas/TimeoutSettings"
-          },
-          "nats_reconnect_count": {
-            "type": "integer",
-            "title": "Nats Reconnect Count",
-            "default": 0
-          },
-          "nats_last_error": {
-            "type": "string",
-            "title": "Nats Last Error",
-            "default": ""
-          },
-          "nats_retry_attempts": {
-            "type": "integer",
-            "title": "Nats Retry Attempts",
-            "default": 3
-          },
-          "nats_retry_interval": {
-            "type": "number",
-            "title": "Nats Retry Interval",
-            "default": 5.0
-          },
-          "last_reconnect_attempt_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Reconnect Attempt At"
-          },
-          "consecutive_reconnect_failures": {
-            "type": "integer",
-            "title": "Consecutive Reconnect Failures",
-            "default": 0
-          },
-          "nats_reconnect_loop_active": {
-            "type": "boolean",
-            "title": "Nats Reconnect Loop Active",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "status",
-          "nats_connected",
-          "timeouts"
-        ],
-        "title": "HealthResponse",
-        "description": "Response body for GET /health."
-      },
-      "SubjectsResponse": {
-        "properties": {
-          "subjects": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Subjects"
-          },
-          "hermes_public_url": {
-            "type": "string",
-            "title": "Hermes Public Url",
-            "default": ""
-          },
-          "active_subjects_max": {
-            "type": "integer",
-            "title": "Active Subjects Max",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "required": [
-          "subjects"
-        ],
-        "title": "SubjectsResponse",
-        "description": "Response body for GET /subjects."
-      },
-      "TimeoutSettings": {
-        "properties": {
-          "nats_connect": {
-            "type": "number",
-            "title": "Nats Connect"
-          },
-          "nats_publish": {
-            "type": "number",
-            "title": "Nats Publish"
-          }
-        },
-        "type": "object",
-        "required": [
-          "nats_connect",
-          "nats_publish"
-        ],
-        "title": "TimeoutSettings",
-        "description": "Timeout values (seconds) surfaced in /health for observability."
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
+    },
+    "/health": {
+      "get": {
+        "description": "Return service health, NATS connection status, dead-letter queue depth, shutdown state, and reconnect timing. Returns 503 when NATS is disconnected so load balancers can route around the degraded instance.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "consecutive_reconnect_failures": 0,
+                  "dead_letter_count": 0,
+                  "dead_letter_queue_alert_threshold_pct": 0.0,
+                  "dead_letter_queue_capacity": 1000,
+                  "dead_letter_queue_depth": 0,
+                  "hmac_validation_enabled": true,
+                  "inflight_requests": 0,
+                  "nats_connected": true,
+                  "nats_last_error": "",
+                  "nats_reconnect_count": 0,
+                  "nats_retry_attempts": 3,
+                  "nats_retry_interval": 5.0,
+                  "reconnect_loop_running": false,
+                  "shutting_down": false,
+                  "status": "ok",
+                  "timeouts": {
+                    "nats_connect": 5.0,
+                    "nats_publish": 5.0
+                  }
                 },
-                {
-                  "type": "integer"
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
-              ]
+              }
             },
-            "type": "array",
-            "title": "Location"
+            "description": "Successful Response"
           },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NATS not reachable"
           }
         },
-        "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError"
-      },
-      "VersionResponse": {
-        "properties": {
-          "version": {
-            "type": "string",
-            "title": "Version"
+        "summary": "Health probe"
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Expose Prometheus exposition-format metrics for all webhook and NATS counters.",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/plain; version=0.0.4; charset=utf-8": {
+                "example": "# HELP hermes_webhooks_received_total Total webhooks received\n# TYPE hermes_webhooks_received_total counter\nhermes_webhooks_received_total{event_type=\"agent.registered\"} 0\n"
+              }
+            },
+            "description": "Successful Response"
           }
         },
-        "type": "object",
-        "required": [
-          "version"
-        ],
-        "title": "VersionResponse",
-        "description": "Response body for GET /version."
-      },
-      "WebhookAcceptedResponse": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status"
+        "summary": "Prometheus metrics"
+      }
+    },
+    "/ready": {
+      "get": {
+        "description": "Check if the service is ready to accept requests. Returns 503 when NATS is not connected.",
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "ready": true
+                },
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ready Ready Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
           },
-          "event": {
-            "type": "string",
-            "title": "Event"
-          },
-          "request_id": {
-            "type": "string",
-            "title": "Request Id"
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NATS not connected"
           }
         },
-        "type": "object",
-        "required": [
-          "status",
-          "event",
-          "request_id"
-        ],
-        "title": "WebhookAcceptedResponse",
-        "description": "Response body for POST /webhook (202 Accepted)."
+        "summary": "Readiness probe"
+      }
+    },
+    "/subjects": {
+      "get": {
+        "description": "Return the list of NATS subjects that have been published to.",
+        "operationId": "list_subjects_subjects_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "active_subjects_max": 100,
+                  "hermes_public_url": "http://localhost:8080",
+                  "subjects": [
+                    "hi.agents.host1.agent1.registered",
+                    "hi.tasks.team1.task1.created"
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List subjects"
+      }
+    },
+    "/version": {
+      "get": {
+        "description": "Return the installed package version.",
+        "operationId": "get_version_version_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "version": "0.1.0"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Version"
+      }
+    },
+    "/webhook": {
+      "post": {
+        "description": "Receive an external webhook, validate its HMAC signature, parse the payload, and publish the event to NATS JetStream. Returns 202 on acceptance; signature/payload/connectivity failures map to 401/422/503.",
+        "operationId": "receive_webhook_webhook_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "event": "agent.registered",
+                  "request_id": "01HZ0000000000000000000000",
+                  "status": "accepted"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookAcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid webhook signature"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed or invalid payload"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NATS publisher not connected"
+          }
+        },
+        "summary": "Receive webhook"
       }
     }
   }

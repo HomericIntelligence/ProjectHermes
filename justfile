@@ -106,6 +106,11 @@ lint-openapi:
     docker run --rm -v "$PWD":/work -w /work stoplight/spectral:6.15.1 \
         lint --ruleset .spectral.yaml --fail-severity=error openapi.json
 
+# Verify the committed openapi.json matches the live FastAPI schema (mirrors CI)
+check-openapi:
+    pixi run python scripts/export-openapi.py --output /tmp/openapi-local.json
+    diff -u openapi.json /tmp/openapi-local.json && echo "OK: openapi.json is in sync"
+
 # === Security ===
 
 # Audit dependencies for known vulnerabilities
