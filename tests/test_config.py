@@ -297,6 +297,12 @@ class TestWebhookSecretProductionWarning:
             )
         warning_messages = [call.args[0] for call in mock_warn.call_args_list if call.args]
         assert any("WEBHOOK_SECRET is NOT SET" in msg for msg in warning_messages)
+        # Structured signal moved from lifespan() to config validator (#515)
+        hmac_calls = [
+            c for c in mock_warn.call_args_list
+            if c.args and "WEBHOOK_SECRET is NOT SET" in c.args[0]
+        ]
+        assert hmac_calls and hmac_calls[0].kwargs.get("extra") == {"hmac_enabled": False}
 
     def test_loud_warning_when_secret_empty_and_host_fqdn(self) -> None:
         from unittest.mock import patch
