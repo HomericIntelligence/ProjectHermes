@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import signal
 from collections.abc import AsyncGenerator, Generator
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,6 +23,7 @@ def _make_mock_publisher(*, connected: bool = True) -> MagicMock:
     mock = MagicMock(spec=Publisher)
     mock.is_connected = connected
     mock.active_subjects = []
+    mock.connect = AsyncMock()
     mock.publish = AsyncMock()
     mock.disconnect = AsyncMock()
     mock.reconnect_count = 0
@@ -223,92 +224,93 @@ class TestLifespanShutdown:
     ) -> None:
         """Lifespan teardown waits until _inflight reaches 0 before disconnecting."""
         import hermes.server as srv
-        from hermes.server import app
-        from hermes.config import Settings
+        from hermes.config import get_settings
+        from hermes.server import app, lifespan
 
         monkeypatch.setenv("SHUTDOWN_TIMEOUT", "2.0")
-        timeout = Settings().shutdown_timeout
+        get_settings.cache_clear()
 
         mock_pub = _make_mock_publisher()
 
-        # Simulate one in-flight request that resolves quickly
-        srv._shutdown_event = asyncio.Event()
-        srv._inflight = 1
-
-        async def _clear_inflight_soon() -> None:
-            await asyncio.sleep(0.2)
-            async with app.state.inflight_lock:
-                srv._inflight = 0
-
-        task = asyncio.create_task(_clear_inflight_soon())
-
-        # Patch publisher.disconnect to confirm it's called after inflight clears
-        disconnect_called_at_inflight: list[int] = []
+        inflight_at_disconnect: list[int] = []
 
         async def _tracked_disconnect(**kwargs: object) -> None:
-            async with app.state.inflight_lock:
-                disconnect_called_at_inflight.append(srv._inflight)
+            async with srv._inflight_lock:
+                inflight_at_disconnect.append(srv._inflight)
 
         mock_pub.disconnect = _tracked_disconnect
 
-        # Run the post-yield shutdown logic directly
-        deadline = timeout
-        poll_interval = 0.05
-        elapsed = 0.0
-        while elapsed < deadline:
-            async with app.state.inflight_lock:
-                remaining = srv._inflight
-            if remaining == 0:
-                break
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
+        clear_task: asyncio.Task[None] | None = None
+        try:
+            with patch("hermes.server.Publisher", return_value=mock_pub):
+                async with lifespan(app):
+                    async with srv._inflight_lock:
+                        srv._inflight = 1
 
-        await _tracked_disconnect()
-        await task
+                    async def _clear_inflight_soon() -> None:
+                        await asyncio.sleep(0.2)
+                        async with srv._inflight_lock:
+                            srv._inflight = 0
 
-        # Disconnect was called only after inflight dropped to 0
-        assert disconnect_called_at_inflight == [0]
+                    clear_task = asyncio.create_task(_clear_inflight_soon())
+                # Exiting the `async with` ran server.lifespan's real finally clause,
+                # which polls _inflight until 0 then awaits publisher.disconnect().
+            if clear_task is not None:
+                await clear_task
+        finally:
+            if clear_task is not None and not clear_task.done():
+                clear_task.cancel()
+            async with srv._inflight_lock:
+                srv._inflight = 0
+            srv._shutdown_event = asyncio.Event()
+            get_settings.cache_clear()
+
+        assert inflight_at_disconnect == [0]
 
     @pytest.mark.asyncio
     async def test_shutdown_proceeds_after_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Lifespan teardown proceeds with disconnect even if inflight never clears."""
+        """Lifespan teardown calls disconnect even if _inflight never reaches 0."""
         import hermes.server as srv
-        from hermes.server import app
-        from hermes.config import Settings
+        from hermes.config import get_settings
+        from hermes.server import app, lifespan
 
         monkeypatch.setenv("SHUTDOWN_TIMEOUT", "0.3")
-        timeout = Settings().shutdown_timeout
+        get_settings.cache_clear()
+        timeout = get_settings().shutdown_timeout
 
-        srv._shutdown_event = asyncio.Event()
-        srv._inflight = 5  # stuck requests
+        mock_pub = _make_mock_publisher()
 
         disconnect_called = False
+        inflight_at_disconnect: list[int] = []
 
         async def _tracked_disconnect(**kwargs: object) -> None:
             nonlocal disconnect_called
             disconnect_called = True
+            async with srv._inflight_lock:
+                inflight_at_disconnect.append(srv._inflight)
 
-        # Run the shutdown polling loop
-        deadline = timeout
-        poll_interval = 0.05
-        elapsed = 0.0
-        while elapsed < deadline:
-            async with app.state.inflight_lock:
-                remaining = srv._inflight
-            if remaining == 0:
-                break
-            await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
+        mock_pub.disconnect = _tracked_disconnect
 
-        await _tracked_disconnect()
+        loop = asyncio.get_event_loop()
+        try:
+            with patch("hermes.server.Publisher", return_value=mock_pub):
+                t_enter = loop.time()
+                async with lifespan(app):
+                    async with srv._inflight_lock:
+                        srv._inflight = 5  # stuck — never cleared
+                t_exit = loop.time()
 
-        assert disconnect_called
-        # _inflight never reached 0 — stuck at 5
-        async with app.state.inflight_lock:
-            assert srv._inflight == 5
+            elapsed = t_exit - t_enter
 
-        # Reset inflight for subsequent tests
-        srv._inflight = 0
+            assert disconnect_called
+            assert inflight_at_disconnect == [5]
+            # Real loop must have honoured the deadline, not short-circuited.
+            assert timeout <= elapsed < timeout + 1.5
+        finally:
+            async with srv._inflight_lock:
+                srv._inflight = 0
+            srv._shutdown_event = asyncio.Event()
+            get_settings.cache_clear()
 
 
 # ---------------------------------------------------------------------------
