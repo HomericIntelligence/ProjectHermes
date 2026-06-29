@@ -26,4 +26,8 @@ build/
 .coverage
 coverage*.xml
 htmlcov/
+
+# Claude tooling scratch artifacts
 .claude-followup-*.md
+.claude-pr-review-*.md
+.claude-address-review-*.md
