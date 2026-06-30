@@ -341,6 +341,20 @@ jobs:
           TEST_NATS_URL: nats://localhost:4222
         run: pixi run pytest -m integration -v
 
+  test:
+    # Canonical aggregate test check. Succeeds iff both the unit and integration
+    # test legs pass. The per-leg checks (unit-tests, integration-tests) are
+    # KEPT so existing branch-protection rules and dashboards keep working.
+    name: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    needs: [unit-tests, integration-tests]
+    permissions:
+      contents: read
+    steps:
+      - name: Aggregate test result
+        run: echo "All test legs (unit-tests, integration-tests) succeeded."
+
   readonly-fs-smoke:
     name: readonly-fs-smoke
     runs-on: ubuntu-24.04
@@ -451,6 +465,124 @@ jobs:
 
       - name: Build wheel
         run: pixi run python -m build --no-isolation
+
+      - name: Upload dist artifact
+        # Shared with the package + install jobs so they validate the exact
+        # artifact this job produced instead of rebuilding it.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  package:
+    name: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: build
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Download dist artifact
+        # Reuses the wheel/sdist built by the `build` job — no rebuild.
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install twine
+        run: pip install --quiet twine
+
+      - name: twine check
+        run: twine check dist/*
+
+  install:
+    name: install
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: build
+    permissions:
+      contents: read
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53  # v6.0.0
+        with:
+          name: dist
+          path: dist/
+
+      - name: Install the wheel into a clean virtualenv
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/hermes-venv
+          # shellcheck disable=SC1091
+          . /tmp/hermes-venv/bin/activate
+          wheel=$(ls dist/*.whl)
+          pip install --quiet "$wheel"
+
+      - name: Smoke-test the installed package
+        # Hermes ships no console entry point, so install-smoke imports the
+        # package and exercises the `python -m hermes` module entry point.
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          . /tmp/hermes-venv/bin/activate
+          python -c "import hermes; import hermes.server; print('import OK:', hermes.__version__)"
+          python -m hermes --help >/dev/null
+          echo "OK: installed wheel imports and 'python -m hermes' runs"
+
+  release:
+    # Release DRY-RUN on every push/PR. Validates the artifacts and contract a
+    # real release depends on, but never publishes — publishing stays gated on
+    # version tags in publish.yml. Emits the canonical `release` check-run.
+    name: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [package, install]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+
+      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11  # v0.9.6
+        with:
+          pixi-version: v0.68.0
+          cache: true
+
+      - name: Validate version parity (pyproject.toml vs pixi.toml)
+        run: |
+          set -euo pipefail
+          PYPROJECT_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          PIXI_VERSION=$(python3 -c "import tomllib; print(tomllib.load(open('pixi.toml','rb'))['workspace']['version'])")
+          if [ "$PYPROJECT_VERSION" != "$PIXI_VERSION" ]; then
+            echo "::error::release blocked — version mismatch: pyproject.toml ($PYPROJECT_VERSION) != pixi.toml ($PIXI_VERSION)"
+            exit 1
+          fi
+          echo "OK: release version is $PYPROJECT_VERSION"
+
+      - name: Validate published contract (openapi.json is current)
+        # The OpenAPI contract is part of the release surface; assert the
+        # committed spec matches the live FastAPI schema before a release.
+        run: |
+          set -euo pipefail
+          pixi run python scripts/export-openapi.py --output /tmp/openapi-release.json
+          if ! diff -u openapi.json /tmp/openapi-release.json; then
+            echo "::error::release blocked — openapi.json is stale. Run 'just export-openapi' and commit."
+            exit 1
+          fi
+          echo "OK: openapi.json contract matches the live schema"
+
+      - name: Release dry-run summary
+        run: echo "Release dry-run passed (no publish — publishing is tag-gated in publish.yml)."
 
   schema-validation:
     name: schema-validation
