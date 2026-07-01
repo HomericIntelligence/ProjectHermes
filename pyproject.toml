@@ -29,7 +29,7 @@ dependencies = [
     # PYSEC-2026-249 (fix 1.3.1), flagged by pip-audit / security/dependency-scan.
     "starlette>=1.3.1,<2",
     "uvicorn[standard]>=0.47.0,<1",
-    "nats-py>=2.14.0,<3",
+    "nats-py>=2.15.0,<3",
     "pydantic>=2.13.4,<3",
     # Bumped to >=2.14.2 to remediate GHSA-4xgf-cpjx-pc3j (pip-audit).
     "pydantic-settings>=2.14.2,<3",
