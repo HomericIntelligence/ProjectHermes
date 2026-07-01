@@ -1,7 +1,7 @@
 services:
   nats:
     # pinned — bump digest monthly or when CVE scan fires
-    image: nats:2.14@sha256:7f430e429d0a90444b38bd40ab7812fd3afcc49a51f6b03a931f9becd5aeb280
+    image: nats:2.14@sha256:7ff2e641c33dbdb0dd13a943ba0b70d841b71275c607baa53ef9b8661f0b2d8c
     command: ["--jetstream", "--store_dir", "/data"]
     ports:
       - "4222:4222"
